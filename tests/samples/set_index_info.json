@@ -1,0 +1,22 @@
+{
+  "indexIndustrySectors": [
+    {
+      "symbol": "SET50",
+      "last": 812.10,
+      "value": 12345.60,
+      "marketDateTime": "2026-07-10T16:45:00+07:00",
+      "marketStatus": "Closed",
+      "change": 1.25,
+      "percentChange": 0.15
+    },
+    {
+      "symbol": "SET",
+      "last": 1618.20,
+      "value": 7.714533774E+10,
+      "marketDateTime": "2026-07-10T16:45:00+07:00",
+      "marketStatus": "Closed",
+      "change": 9.90,
+      "percentChange": 0.62
+    }
+  ]
+}

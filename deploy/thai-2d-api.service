@@ -1,0 +1,27 @@
+[Unit]
+Description=Thai 2D read-only FastAPI service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thai2d
+Group=thai2d
+WorkingDirectory=/opt/thai-2d-api
+EnvironmentFile=/opt/thai-2d-api/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStartPre=/opt/thai-2d-api/.venv/bin/python deploy/predeploy_check.py --mode api --skip-tests
+ExecStart=/opt/thai-2d-api/.venv/bin/python -m uvicorn api:app --host 127.0.0.1 --port 8000 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/lib/thai-2d
+ReadWritePaths=/opt/thai-2d-api/.runtime-home
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

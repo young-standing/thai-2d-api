@@ -1,0 +1,30 @@
+[Unit]
+Description=Thai 2D Yangon scheduled collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thai2d
+Group=thai2d
+WorkingDirectory=/opt/thai-2d-api
+EnvironmentFile=/opt/thai-2d-api/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=HOME=/opt/thai-2d-api/.runtime-home
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/thai-2d-api/.cache/ms-playwright
+ExecStartPre=/opt/thai-2d-api/.venv/bin/python deploy/predeploy_check.py --mode collector --skip-tests
+ExecStart=/opt/thai-2d-api/.venv/bin/python scheduled_collector.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=45
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/thai-2d /opt/thai-2d-api/.runtime-home
+ReadOnlyPaths=/opt/thai-2d-api
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
