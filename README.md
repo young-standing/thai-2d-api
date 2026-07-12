@@ -1,78 +1,75 @@
 # thai-2d-api
 
-A production-oriented FastAPI service that collects public Thai SET index data on a schedule, stores current and historical snapshots, and serves only stored data to API clients. API reads never scrape SET.
+Thai SET market collection and verified Myanmar 2D calculation with a serverless GitHub Actions + GitHub Pages production path.
 
-> Market data usage may be subject to SET terms and licensing. The default URL is the website's current public overview XHR, not a guaranteed public API contract. Confirm that your use complies with SET terms. This project does not bypass authentication, access controls, rate limits, or anti-bot systems.
+The project collects the public SET index JSON through a requests-first client with a compliant Playwright fallback. Numeric inputs remain exact strings and calculations use `Decimal`; no authentication, CAPTCHA, or anti-bot controls are bypassed.
 
-## Features
+## Production architecture
 
-- Scheduled background collection with timeout, exponential-backoff retries, and structured JSON logs
-- JSON/XHR collector first; optional Playwright fallback against the normal public page
-- SQLite via a repository boundary and SQLAlchemy, allowing a later PostgreSQL URL/migration
-- String storage for index and market value, preserving source trailing zeros
-- Database-level duplicate prevention and explicit stale-data responses
-- Constant-time API-key check for manual refresh
-- No invented 2D rule: raw SET index/value are returned separately
+```text
+GitHub Actions schedule
+  -> UnifiedSetClient
+  -> verified Myanmar 2D calculation
+  -> public/latest.json + public/history.json
+  -> GitHub Pages
+```
 
-## API
+Production requires no VM, Docker runtime, continuously running API, or production SQLite database. See [GITHUB_ACTIONS_DEPLOYMENT.md](GITHUB_ACTIONS_DEPLOYMENT.md).
 
-- `GET /health`
-- `GET /api/market/latest`
-- `GET /api/market/history?limit=50` (1–1000)
-- `GET /api/2d/latest`
-- `POST /api/admin/refresh` with `X-API-Key: <ADMIN_API_KEY>`
+The Pages client fetches `latest.json?t=<current timestamp>` to avoid stale intermediary caches.
 
-Interactive documentation is available at `/docs`.
+## Local setup
 
-## Windows setup (PowerShell)
+Windows PowerShell:
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-Copy-Item .env.example .env
-# Edit .env and replace ADMIN_API_KEY.
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+playwright install chromium
+pytest -q
 ```
 
-Run tests with `pytest -q`. If the explicitly enabled browser fallback is needed, run `playwright install chromium`.
-
-## Ubuntu setup
+Ubuntu:
 
 ```bash
-sudo apt update
-sudo apt install -y python3 python3-venv
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-cp .env.example .env
-# Edit .env and replace ADMIN_API_KEY.
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+playwright install --with-deps chromium
+pytest -q
 ```
 
-Run tests with `pytest -q`. If browser fallback is explicitly enabled, install Chromium and its OS dependencies with `playwright install --with-deps chromium`.
+One-shot publishing commands:
 
-## Configuration and operation
+```bash
+python github_publisher.py --window morning
+python github_publisher.py --window evening
+python github_publisher.py --once
+```
 
-All settings use environment variables shown in `.env.example`. Keep `PLAYWRIGHT_FALLBACK_ENABLED=false` unless the JSON endpoint is unavailable and browser collection is acceptable under the upstream terms. Collection begins on application startup and repeats every `COLLECTOR_INTERVAL_SECONDS`. Manual refresh uses the same locked collector, so overlapping refreshes cannot race.
+## Local API and persistence
 
-When SET cannot be reached, the failed collection is logged and existing database data remains available. Responses mark old records with `is_stale=true` after `STALE_AFTER_SECONDS`. Before data has ever been collected, data endpoints return HTTP 503.
+The existing SQLite repository, Yangon scheduler, and read-only FastAPI application remain available for local or optional self-hosted use:
 
-For multiple production workers, run the collector in exactly one process (set `COLLECTOR_ENABLED=false` on API-only workers) or move scheduling to a dedicated worker. SQLite is suitable for the initial single-node deployment; PostgreSQL should be introduced with a migration tool such as Alembic before scaling writes.
+```bash
+python fetch_and_save.py
+uvicorn api:app --host 127.0.0.1 --port 8000
+```
 
-## 2D calculation strategy
+API endpoints:
 
-There is no assumed calculation rule in this repository. The configured `raw_only` strategy returns the raw `set_index` and `set_value`, with `two_d: null` and `calculation_status: not_configured`.
+- `GET /health`
+- `GET /api/market/latest`
+- `GET /api/market/history?limit=50`
+- `GET /api/2d/latest`
 
-To add a rule, implement `TwoDStrategy` in `app/services/two_d_service.py`, register it by name, document the exact approved specification and test vectors, then select it with `TWO_D_STRATEGY`. Do not derive a rule from examples alone.
+## Optional VM/Docker deployment
 
-## Production checklist
+Google Compute Engine, Docker Compose, Nginx, and systemd files are retained only as an optional alternative. They are not used by the GitHub production workflow. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
-- Replace the admin key with a secret supplied by your deployment platform.
-- Confirm SET data rights, endpoint stability, permitted interval, and redistribution terms.
-- Pin and scan dependencies; terminate TLS at a trusted proxy and restrict the admin endpoint.
-- Add Alembic migrations and PostgreSQL before horizontal scaling.
-- Add external health monitoring, log aggregation, backups, and a retention policy.
-- Run a single scheduler or dedicated collector process to avoid duplicate upstream requests.
+## Data-use notice
+
+SET market data usage may be subject to SET terms and licensing. Confirm endpoint use, collection frequency, and redistribution rights for your application. Never commit cookies, browser profiles, credentials, raw response bodies, traces, databases, or logs.

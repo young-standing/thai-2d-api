@@ -1,0 +1,88 @@
+name: Publish Myanmar 2D
+
+on:
+  schedule:
+    # Asia/Yangon is UTC+06:30. Run slightly before each result window.
+    - cron: "28 5 * * 1-5"  # 11:58 Yangon
+    - cron: "57 9 * * 1-5"  # 16:27 Yangon
+  workflow_dispatch:
+    inputs:
+      window:
+        description: Result window to collect
+        required: true
+        type: choice
+        options:
+          - morning
+          - evening
+
+concurrency:
+  group: github-pages-2d-publisher
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install --requirement requirements.txt
+
+      - name: Install matching Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run full test suite
+        run: python -m pytest -q
+
+      - name: Select result window
+        id: window
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          MANUAL_WINDOW: ${{ inputs.window }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            window="$MANUAL_WINDOW"
+          elif [[ "$SCHEDULE" == "28 5 * * 1-5" ]]; then
+            window="morning"
+          elif [[ "$SCHEDULE" == "57 9 * * 1-5" ]]; then
+            window="evening"
+          else
+            echo "Unknown trigger" >&2
+            exit 1
+          fi
+          echo "window=$window" >> "$GITHUB_OUTPUT"
+
+      - name: Collect and build static JSON
+        env:
+          HEADLESS: "true"
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python github_publisher.py --window "${{ steps.window.outputs.window }}"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload public directory only
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

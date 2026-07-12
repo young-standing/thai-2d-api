@@ -1,0 +1,15 @@
+{
+  "fetched_at": "",
+  "index_digit": "",
+  "market_datetime": "",
+  "market_status": "Unavailable",
+  "number": "--",
+  "session": "morning",
+  "set_index": "",
+  "source_client": "",
+  "stale": true,
+  "strategy": "set_hundredths_plus_value_million_units",
+  "value_digit": "",
+  "value_million": "",
+  "value_raw": ""
+}
