@@ -254,10 +254,12 @@ class GitHubPublisher:
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    modes = parser.add_mutually_exclusive_group(required=True)
-    modes.add_argument("--window", choices=("morning", "evening"))
-    modes.add_argument("--once", action="store_true")
-    return parser.parse_args()
+    parser.add_argument("--window", choices=("morning", "evening"))
+    parser.add_argument("--once", action="store_true")
+    arguments = parser.parse_args()
+    if arguments.window is None and not arguments.once:
+        parser.error("one of --window or --once is required")
+    return arguments
 
 
 async def main() -> None:

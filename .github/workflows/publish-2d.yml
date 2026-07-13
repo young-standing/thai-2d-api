@@ -7,13 +7,22 @@ on:
     - cron: "57 9 * * 1-5"  # 16:27 Yangon
   workflow_dispatch:
     inputs:
-      window:
-        description: Result window to collect
+      session:
+        description: Result session to publish
         required: true
         type: choice
+        default: morning
         options:
           - morning
           - evening
+      mode:
+        description: Publish once or poll for a new result
+        required: true
+        type: choice
+        default: once
+        options:
+          - once
+          - poll
 
 concurrency:
   group: github-pages-2d-publisher
@@ -49,31 +58,55 @@ jobs:
       - name: Run full test suite
         run: python -m pytest -q
 
-      - name: Select result window
-        id: window
+      - name: Select result session and mode
+        id: selection
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           SCHEDULE: ${{ github.event.schedule }}
-          MANUAL_WINDOW: ${{ inputs.window }}
+          MANUAL_SESSION: ${{ inputs.session }}
+          MANUAL_MODE: ${{ inputs.mode }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            window="$MANUAL_WINDOW"
+            session="$MANUAL_SESSION"
+            mode="$MANUAL_MODE"
+            run_type="manual"
           elif [[ "$SCHEDULE" == "28 5 * * 1-5" ]]; then
-            window="morning"
+            session="morning"
+            mode="poll"
+            run_type="scheduled"
           elif [[ "$SCHEDULE" == "57 9 * * 1-5" ]]; then
-            window="evening"
+            session="evening"
+            mode="poll"
+            run_type="scheduled"
           else
             echo "Unknown trigger" >&2
             exit 1
           fi
-          echo "window=$window" >> "$GITHUB_OUTPUT"
+          echo "session=$session" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "run_type=$run_type" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Myanmar 2D publication"
+            echo "- Selected session: $session"
+            echo "- Selected mode: $mode"
+            echo "- Run type: $run_type"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect and build static JSON
+        shell: bash
         env:
           HEADLESS: "true"
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: python github_publisher.py --window "${{ steps.window.outputs.window }}"
+          SELECTED_SESSION: ${{ steps.selection.outputs.session }}
+          SELECTED_MODE: ${{ steps.selection.outputs.mode }}
+        run: |
+          if [[ "$SELECTED_MODE" == "once" ]]; then
+            python github_publisher.py --window "$SELECTED_SESSION" --once
+          else
+            python github_publisher.py --window "$SELECTED_SESSION"
+          fi
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
