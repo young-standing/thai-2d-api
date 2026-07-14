@@ -1,0 +1,73 @@
+name: Backfill Myanmar 2D History
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_production:
+        description: Deploy the verified backfill to GitHub Pages
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: github-pages-2d-publisher
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  backfill:
+    if: inputs.publish_production == true
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install --requirement requirements.txt
+
+      - name: Run full test suite
+        run: python -m pytest -q
+
+      - name: Import last 30 calendar days
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: >-
+          python historical_backfill.py
+          --days 30
+          --output-dir "$RUNNER_TEMP/pages"
+
+      - name: Summarize backfill
+        run: |
+          {
+            echo "### Historical 2D backfill"
+            echo "- Source: api.thaistock2d.com (secondary, untrusted)"
+            echo "- Range: last 30 calendar days"
+            echo "- Official scheduled records retain priority"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload backfilled Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/pages
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

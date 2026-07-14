@@ -57,6 +57,16 @@ python github_publisher.py --once
 python github_publisher.py --window evening --once --artifact-path .tmp/smoke.json
 ```
 
+Optional manual historical backfill from the untrusted secondary source:
+
+```bash
+python historical_backfill.py --days 30 --output-dir backfill-public
+```
+
+Backfill records are locally recalculated, tagged as third-party history, and
+cannot replace official scheduled records. The backfill workflow has no schedule
+and requires explicit production confirmation.
+
 ## Local API and persistence
 
 The existing SQLite repository, Yangon scheduler, and read-only FastAPI application remain available for local or optional self-hosted use:

@@ -302,18 +302,18 @@ async def test_leading_zero_result_and_metadata(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_history_is_newest_first_and_limited_to_100(tmp_path):
-    base = datetime(2026, 1, 1, 9, 0, tzinfo=YANGON)
+async def test_history_is_newest_first_and_limited_to_200(tmp_path):
+    base = datetime(2025, 12, 1, 9, 0, tzinfo=YANGON)
     history = [
-        public_record((base + timedelta(minutes=index)).isoformat())
-        for index in range(100)
+        public_record((base + timedelta(days=index)).isoformat())
+        for index in range(200)
     ]
     clock = FakeClock(datetime(2026, 7, 13, 12, 1, tzinfo=YANGON))
     result = await publisher(
         tmp_path, FakeClient([sample()]), clock, history=history
     ).publish("morning")
     saved = json.loads((tmp_path / "public/history.json").read_text())
-    assert len(saved) == 100
+    assert len(saved) == 200
     assert saved[0]["market_datetime"] == result["market_datetime"]
 
 

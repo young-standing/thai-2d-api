@@ -10,5 +10,7 @@ venv/
 *.sqlite*
 .scheduled_collector.lock
 playwright-report/
+backfill-public/
+.pytest-tmp/
 .idea/
 .vscode/

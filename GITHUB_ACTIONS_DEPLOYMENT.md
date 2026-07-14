@@ -43,10 +43,10 @@ If the Pages URL differs, set the workflow environment variable `PUBLISHED_BASE_
 ## Static data
 
 - `public/latest.json` contains only the latest captured scheduled result.
-- `public/history.json` contains at most 100 unique results, newest first.
+- `public/history.json` contains at most 200 unique results, newest first.
 - `public/index.html` is a dependency-free responsive viewer.
 
-Pages artifacts are immutable per deployment and do not preserve files automatically. Before writing a new artifact, the publisher downloads the live `history.json`, accepts only the exact public schema with string numeric fields, removes duplicate `market_datetime` values, and discards malformed data. If download or validation fails, it safely starts with an empty history.
+Pages artifacts are immutable per deployment and do not preserve files automatically. Before writing a new artifact, the publisher downloads the live `history.json`, accepts only the explicit scheduled-result and verified-backfill schemas, and deduplicates by result date and session time. Official scheduled records always take priority over third-party backfills.
 
 Failed collection or calculation occurs before static files are replaced, so a failed run cannot overwrite the currently deployed valid Pages result.
 
@@ -88,6 +88,24 @@ This prints a normalized smoke result and never writes `public/latest.json` or
 
 ```bash
 python github_publisher.py --window morning --once --artifact-path .tmp/smoke.json
+```
+
+## Optional historical backfill
+
+The **Backfill Myanmar 2D History** workflow is manual-only. It requests each of
+the last 30 calendar dates separately from `api.thaistock2d.com`, rate limits the
+requests, and accepts only records whose supplied 2D result matches the local
+SET-hundredths and displayed-value-units calculation.
+
+This API is an untrusted secondary source. It is never used for current live
+results, never changes the scheduled `latest.json` record, and cannot replace an
+official record with the same result date and session time. To run it, open the
+manual workflow and enable `publish_production` explicitly.
+
+Local artifact generation uses a separate directory:
+
+```bash
+python historical_backfill.py --days 30 --output-dir backfill-public
 ```
 
 ## Security and artifacts

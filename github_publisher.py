@@ -24,7 +24,7 @@ TARGETS = {"morning": time(12, 1), "evening": time(16, 30)}
 POLL_SECONDS = 30
 WINDOW_START_BEFORE_TARGET = timedelta(minutes=3)
 WINDOW_END_AFTER_TARGET = timedelta(minutes=2)
-MAX_HISTORY = 100
+MAX_HISTORY = 200
 MAX_REMOTE_BYTES = 1_000_000
 PUBLIC_FIELDS = (
     "number",
@@ -45,6 +45,19 @@ PUBLIC_FIELDS = (
     "publication_type",
     "stale",
 )
+BACKFILL_EXTRA_FIELDS = (
+    "result_date",
+    "open_time",
+    "source",
+    "verified_locally",
+)
+BACKFILL_PUBLIC_FIELDS = PUBLIC_FIELDS + BACKFILL_EXTRA_FIELDS
+BACKFILL_SESSIONS = {
+    "11:00:00": "morning_open",
+    "12:01:00": "morning",
+    "15:00:00": "afternoon_open",
+    "16:30:00": "evening",
+}
 TWO_DIGITS = re.compile(r"^\d{2}$")
 ONE_DIGIT = re.compile(r"^\d$")
 DECIMAL_STRING = re.compile(r"^\d+\.\d+$")
@@ -82,29 +95,57 @@ def _remote_json(url: str) -> Any:
 
 
 def validate_public_record(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict) or set(value) != set(PUBLIC_FIELDS):
+    if not isinstance(value, dict):
+        return None
+    publication_type = value.get("publication_type")
+    if publication_type == "scheduled_result":
+        expected_fields = PUBLIC_FIELDS
+    elif publication_type == "historical_backfill":
+        expected_fields = BACKFILL_PUBLIC_FIELDS
+    else:
+        return None
+    if set(value) != set(expected_fields):
         return None
     record: dict[str, Any] = {}
-    for field in PUBLIC_FIELDS:
+    for field in expected_fields:
         item = value[field]
-        if field == "stale":
+        if field in {"stale", "verified_locally"}:
             if not isinstance(item, bool):
                 return None
         elif not isinstance(item, str):
             return None
         record[field] = item
-    if record["session"] not in {"morning", "evening"}:
-        return None
-    if record["publication_type"] != "scheduled_result":
-        return None
-    if record["target_time_yangon"] != TARGETS[record["session"]].isoformat():
-        return None
     if record["source_market_datetime"] != record["market_datetime"]:
         return None
-    if record["source_client"] not in {"requests", "playwright"}:
-        return None
-    if record["strategy"] != "set_hundredths_plus_value_million_units":
-        return None
+    if publication_type == "scheduled_result":
+        if record["session"] not in {"morning", "evening"}:
+            return None
+        if record["target_time_yangon"] != TARGETS[record["session"]].isoformat():
+            return None
+        if record["source_client"] not in {"requests", "playwright"}:
+            return None
+        if record["strategy"] != "set_hundredths_plus_value_million_units":
+            return None
+    else:
+        open_time = record["open_time"]
+        if open_time not in BACKFILL_SESSIONS:
+            return None
+        if record["session"] != BACKFILL_SESSIONS[open_time]:
+            return None
+        if record["target_time_yangon"] != open_time:
+            return None
+        if record["source_client"] != "api.thaistock2d.com":
+            return None
+        if record["source"] != "api.thaistock2d.com":
+            return None
+        if record["verified_locally"] is not True:
+            return None
+        if record["strategy"] != "set_hundredths_plus_displayed_value_units":
+            return None
+        try:
+            result_date = date.fromisoformat(record["result_date"])
+        except ValueError:
+            return None
     if TWO_DIGITS.fullmatch(record["number"]) is None:
         return None
     if ONE_DIGIT.fullmatch(record["index_digit"]) is None:
@@ -133,23 +174,48 @@ def validate_public_record(value: Any) -> dict[str, Any] | None:
         captured_time,
     )):
         return None
+    if publication_type == "historical_backfill":
+        if market_time.astimezone(YANGON).date() != result_date:
+            return None
+        if market_time.astimezone(YANGON).time().replace(tzinfo=None) != time.fromisoformat(record["open_time"]):
+            return None
     return record
+
+
+def record_identity(record: dict[str, Any]) -> tuple[str, str]:
+    if record.get("publication_type") == "historical_backfill":
+        return record["result_date"], record["open_time"]
+    source = datetime.fromisoformat(record["source_market_datetime"]).astimezone(YANGON)
+    return source.date().isoformat(), record["target_time_yangon"]
+
+
+def _record_timestamp(record: dict[str, Any]) -> datetime:
+    return datetime.fromisoformat(record["market_datetime"]).astimezone(timezone.utc)
+
+
+def merge_public_history(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for record in records:
+        key = record_identity(record)
+        existing = merged.get(key)
+        if existing is None or (
+            record["publication_type"] == "scheduled_result"
+            and existing["publication_type"] != "scheduled_result"
+        ):
+            merged[key] = record
+    return sorted(merged.values(), key=_record_timestamp, reverse=True)[:MAX_HISTORY]
 
 
 def validate_history(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     validated: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for item in value[:MAX_HISTORY]:
+    for item in value:
         record = validate_public_record(item)
         if record is None:
             return []
-        if record["market_datetime"] in seen:
-            continue
-        seen.add(record["market_datetime"])
         validated.append(record)
-    return validated
+    return merge_public_history(validated)
 
 
 def _previous_weekday(value: date) -> date:
@@ -360,12 +426,8 @@ class GitHubPublisher:
             {**item, "stale": is_scheduled_result_stale(item, captured_at)}
             for item in history
         ]
-        merged = [record] + [
-            item
-            for item in refreshed_history
-            if item["market_datetime"] != record["market_datetime"]
-        ]
-        self._write(record, merged[:MAX_HISTORY])
+        merged = merge_public_history([record, *refreshed_history])
+        self._write(record, merged)
         return record
 
     async def smoke(
