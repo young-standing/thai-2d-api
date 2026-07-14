@@ -42,32 +42,35 @@ jobs:
         run: python -m pytest -q
 
       - name: Import last 30 calendar days
+        id: import
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: >-
           python historical_backfill.py
           --days 30
           --output-dir "$RUNNER_TEMP/pages"
+          --report-path "$RUNNER_TEMP/backfill-report.json"
 
       - name: Summarize backfill
-        run: |
-          {
-            echo "### Historical 2D backfill"
-            echo "- Source: api.thaistock2d.com (secondary, untrusted)"
-            echo "- Range: last 30 calendar days"
-            echo "- Official scheduled records retain priority"
-          } >> "$GITHUB_STEP_SUMMARY"
+        if: always()
+        run: >-
+          python historical_backfill.py
+          --render-summary "$RUNNER_TEMP/backfill-report.json"
+          >> "$GITHUB_STEP_SUMMARY"
 
       - name: Configure GitHub Pages
+        if: success() && steps.import.outcome == 'success'
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
       - name: Upload backfilled Pages artifact
+        if: success() && steps.import.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ${{ runner.temp }}/pages
 
       - name: Deploy GitHub Pages
+        if: success() && steps.import.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v4

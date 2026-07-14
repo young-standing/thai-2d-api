@@ -102,6 +102,12 @@ results, never changes the scheduled `latest.json` record, and cannot replace an
 official record with the same result date and session time. To run it, open the
 manual workflow and enable `publish_production` explicitly.
 
+The workflow logs only safe request diagnostics: date, endpoint host, HTTP
+status, response content type, record counts, and categorized rejection reasons.
+It never logs headers, cookies, authorization values, or response bodies. An
+`always()` summary step reports the failure category and confirms that published
+JSON remained unchanged even when the import command exits unsuccessfully.
+
 Local artifact generation uses a separate directory:
 
 ```bash
