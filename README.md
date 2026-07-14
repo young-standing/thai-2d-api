@@ -42,12 +42,19 @@ playwright install --with-deps chromium
 pytest -q
 ```
 
-One-shot publishing commands:
+Scheduled production polling commands (valid only inside the corresponding
+weekday result window):
 
 ```bash
 python github_publisher.py --window morning
 python github_publisher.py --window evening
+```
+
+Smoke-test collection without modifying production JSON:
+
+```bash
 python github_publisher.py --once
+python github_publisher.py --window evening --once --artifact-path .tmp/smoke.json
 ```
 
 ## Local API and persistence

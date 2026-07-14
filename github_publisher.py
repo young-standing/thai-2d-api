@@ -7,7 +7,7 @@ import asyncio
 import json
 import os
 import re
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
 from urllib.parse import urljoin, urlparse
@@ -22,7 +22,8 @@ YANGON = ZoneInfo("Asia/Yangon")
 SessionName = Literal["morning", "evening"]
 TARGETS = {"morning": time(12, 1), "evening": time(16, 30)}
 POLL_SECONDS = 30
-WINDOW_SECONDS = 300
+WINDOW_START_BEFORE_TARGET = timedelta(minutes=3)
+WINDOW_END_AFTER_TARGET = timedelta(minutes=2)
 MAX_HISTORY = 100
 MAX_REMOTE_BYTES = 1_000_000
 PUBLIC_FIELDS = (
@@ -38,6 +39,10 @@ PUBLIC_FIELDS = (
     "source_client",
     "strategy",
     "session",
+    "target_time_yangon",
+    "captured_at_yangon",
+    "source_market_datetime",
+    "publication_type",
     "stale",
 )
 TWO_DIGITS = re.compile(r"^\d{2}$")
@@ -90,6 +95,12 @@ def validate_public_record(value: Any) -> dict[str, Any] | None:
         record[field] = item
     if record["session"] not in {"morning", "evening"}:
         return None
+    if record["publication_type"] != "scheduled_result":
+        return None
+    if record["target_time_yangon"] != TARGETS[record["session"]].isoformat():
+        return None
+    if record["source_market_datetime"] != record["market_datetime"]:
+        return None
     if record["source_client"] not in {"requests", "playwright"}:
         return None
     if record["strategy"] != "set_hundredths_plus_value_million_units":
@@ -113,9 +124,14 @@ def validate_public_record(value: Any) -> dict[str, Any] | None:
     try:
         market_time = datetime.fromisoformat(record["market_datetime"])
         fetched_time = datetime.fromisoformat(record["fetched_at"])
+        captured_time = datetime.fromisoformat(record["captured_at_yangon"])
     except ValueError:
         return None
-    if market_time.tzinfo is None or fetched_time.tzinfo is None:
+    if any(value.tzinfo is None or value.utcoffset() is None for value in (
+        market_time,
+        fetched_time,
+        captured_time,
+    )):
         return None
     return record
 
@@ -134,6 +150,42 @@ def validate_history(value: Any) -> list[dict[str, Any]]:
         seen.add(record["market_datetime"])
         validated.append(record)
     return validated
+
+
+def _previous_weekday(value: date) -> date:
+    previous = value - timedelta(days=1)
+    while previous.weekday() >= 5:
+        previous -= timedelta(days=1)
+    return previous
+
+
+def expected_scheduled_result(current: datetime) -> tuple[date, SessionName]:
+    """Return the market date and session expected at a Yangon-local instant."""
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise GitHubPublisherError("Stale-check time must be timezone-aware")
+    local = current.astimezone(YANGON)
+    if local.weekday() >= 5:
+        return _previous_weekday(local.date()), "evening"
+    if local.time() >= TARGETS["evening"]:
+        return local.date(), "evening"
+    if local.time() >= TARGETS["morning"]:
+        return local.date(), "morning"
+    return _previous_weekday(local.date()), "evening"
+
+
+def is_scheduled_result_stale(record: dict[str, Any], current: datetime) -> bool:
+    expected_date, expected_session = expected_scheduled_result(current)
+    try:
+        source = datetime.fromisoformat(record["source_market_datetime"])
+    except (KeyError, TypeError, ValueError):
+        return True
+    if source.tzinfo is None or source.utcoffset() is None:
+        return True
+    return (
+        record.get("publication_type") != "scheduled_result"
+        or record.get("session") != expected_session
+        or source.astimezone(YANGON).date() != expected_date
+    )
 
 
 class GitHubPublisher:
@@ -177,50 +229,96 @@ class GitHubPublisher:
         return value
 
     def _target(self, session: SessionName, current: datetime) -> datetime:
+        if session not in TARGETS:
+            raise GitHubPublisherError("Session must be morning or evening")
         local = self._aware(current).astimezone(YANGON)
         return datetime.combine(local.date(), TARGETS[session], tzinfo=YANGON)
 
-    async def _capture(self, session: SessionName, *, poll: bool) -> dict[str, str]:
-        previous = validate_public_record(self._load_published("latest.json"))
+    async def _capture_scheduled(
+        self,
+        session: SessionName,
+        *,
+        expected_session: SessionName | None = None,
+    ) -> tuple[dict[str, str], datetime]:
+        if session not in TARGETS:
+            raise GitHubPublisherError("Session must be morning or evening")
+        if expected_session is not None and session != expected_session:
+            raise GitHubPublisherError("Session does not match the scheduled workflow")
+        raw_previous = self._load_published("latest.json")
+        previous = validate_public_record(raw_previous)
         previous_timestamp = previous["market_datetime"] if previous else None
+        if previous_timestamp is None and isinstance(raw_previous, dict):
+            legacy_timestamp = raw_previous.get("market_datetime")
+            if isinstance(legacy_timestamp, str):
+                try:
+                    self._aware(datetime.fromisoformat(legacy_timestamp))
+                except (ValueError, GitHubPublisherError):
+                    pass
+                else:
+                    previous_timestamp = legacy_timestamp
         started = self._aware(self.now()).astimezone(YANGON)
-        deadline = started + timedelta(seconds=WINDOW_SECONDS)
         target = self._target(session, started)
+        window_start = target - WINDOW_START_BEFORE_TARGET
+        deadline = target + WINDOW_END_AFTER_TARGET
+        if started.weekday() >= 5:
+            raise GitHubPublisherError("Scheduled publication is allowed Monday through Friday only")
+        if started < window_start or started > deadline:
+            raise GitHubPublisherError("Publisher started outside the scheduled collection window")
 
         while True:
             try:
                 sample = await self.client.fetch()
-            except Exception as exc:
-                if not poll or self._aware(self.now()).astimezone(YANGON) >= deadline:
-                    raise GitHubPublisherError("SET fetch failed; published files were not changed") from exc
+            except Exception:
+                pass
             else:
                 try:
                     source_time = self._aware(datetime.fromisoformat(sample["marketDateTime"]))
-                except (KeyError, ValueError) as exc:
+                except (KeyError, TypeError, ValueError) as exc:
                     raise GitHubPublisherError("SET sample contains an invalid marketDateTime") from exc
-                changed = sample["marketDateTime"] != previous_timestamp
-                after_target = source_time.astimezone(YANGON) >= target
-                if not poll or (changed and after_target):
-                    return sample
+                source_yangon = source_time.astimezone(YANGON)
+                captured_at = self._aware(self.now()).astimezone(YANGON)
+                changed = previous_timestamp is None or sample["marketDateTime"] != previous_timestamp
+                expected_date = source_yangon.date() == target.date()
+                inside_target_window = target <= source_yangon <= deadline
+                captured_inside_window = target <= captured_at <= deadline
+                if changed and expected_date and inside_target_window and captured_inside_window:
+                    return sample, captured_at
 
             current = self._aware(self.now()).astimezone(YANGON)
             if current >= deadline:
                 raise GitHubPublisherError("Collection window expired; published files were not changed")
             await self.sleep(min(POLL_SECONDS, (deadline - current).total_seconds()))
 
-    def _record(self, sample: dict[str, str], session: SessionName) -> dict[str, Any]:
+    def _record(
+        self,
+        sample: dict[str, str],
+        session: SessionName,
+        captured_at: datetime,
+        *,
+        publication_type: str,
+    ) -> dict[str, Any]:
         calculated = MyanmarTwoDStrategy().calculate(
             last=sample["last"], value=sample["value"]
         )
-        return {
+        captured_yangon = self._aware(captured_at).astimezone(YANGON)
+        record = {
             **calculated,
             "market_datetime": sample["marketDateTime"],
             "market_status": sample["marketStatus"],
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "fetched_at": captured_yangon.astimezone(timezone.utc).isoformat(),
             "source_client": sample["sourceClient"],
             "session": session,
-            "stale": False,
+            "target_time_yangon": TARGETS[session].isoformat(),
+            "captured_at_yangon": captured_yangon.isoformat(),
+            "source_market_datetime": sample["marketDateTime"],
+            "publication_type": publication_type,
         }
+        record["stale"] = (
+            is_scheduled_result_stale(record, captured_yangon)
+            if publication_type == "scheduled_result"
+            else True
+        )
+        return record
 
     def _write(self, latest: dict[str, Any], history: list[dict[str, Any]]) -> None:
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -241,14 +339,59 @@ class GitHubPublisher:
             for temp in temporary.values():
                 temp.unlink(missing_ok=True)
 
-    async def publish(self, session: SessionName, *, poll: bool = True) -> dict[str, Any]:
-        sample = await self._capture(session, poll=poll)
-        record = self._record(sample, session)
+    async def publish(
+        self,
+        session: SessionName,
+        *,
+        expected_session: SessionName | None = None,
+    ) -> dict[str, Any]:
+        sample, captured_at = await self._capture_scheduled(
+            session,
+            expected_session=expected_session,
+        )
+        record = self._record(
+            sample,
+            session,
+            captured_at,
+            publication_type="scheduled_result",
+        )
         history = validate_history(self._load_published("history.json"))
+        refreshed_history = [
+            {**item, "stale": is_scheduled_result_stale(item, captured_at)}
+            for item in history
+        ]
         merged = [record] + [
-            item for item in history if item["market_datetime"] != record["market_datetime"]
+            item
+            for item in refreshed_history
+            if item["market_datetime"] != record["market_datetime"]
         ]
         self._write(record, merged[:MAX_HISTORY])
+        return record
+
+    async def smoke(
+        self,
+        session: SessionName,
+        *,
+        artifact_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        if session not in TARGETS:
+            raise GitHubPublisherError("Session must be morning or evening")
+        sample = await self.client.fetch()
+        record = self._record(
+            sample,
+            session,
+            self._aware(self.now()),
+            publication_type="smoke_test",
+        )
+        if artifact_path is not None:
+            path = Path(artifact_path).resolve()
+            if path.is_relative_to(self.output_dir):
+                raise GitHubPublisherError("Smoke artifacts cannot be written under the public directory")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         return record
 
 
@@ -256,6 +399,7 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--window", choices=("morning", "evening"))
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--artifact-path")
     arguments = parser.parse_args()
     if arguments.window is None and not arguments.once:
         parser.error("one of --window or --once is required")
@@ -266,7 +410,12 @@ async def main() -> None:
     arguments = _arguments()
     current = datetime.now(YANGON)
     session: SessionName = arguments.window or ("morning" if current.time() < time(14) else "evening")
-    record = await GitHubPublisher().publish(session, poll=not arguments.once)
+    publisher = GitHubPublisher()
+    if arguments.once:
+        record = await publisher.smoke(session, artifact_path=arguments.artifact_path)
+    else:
+        expected_session = os.getenv("EXPECTED_SESSION") or None
+        record = await publisher.publish(session, expected_session=expected_session)
     print(json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True))
 
 

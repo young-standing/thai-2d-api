@@ -16,13 +16,18 @@ on:
           - morning
           - evening
       mode:
-        description: Publish once or poll for a new result
+        description: Smoke test once or poll for a production result
         required: true
         type: choice
         default: once
         options:
           - once
           - poll
+      publish_production:
+        description: Allow a manual poll run to deploy production files
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
   group: github-pages-2d-publisher
@@ -66,32 +71,46 @@ jobs:
           SCHEDULE: ${{ github.event.schedule }}
           MANUAL_SESSION: ${{ inputs.session }}
           MANUAL_MODE: ${{ inputs.mode }}
+          MANUAL_PUBLISH_PRODUCTION: ${{ inputs.publish_production }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             session="$MANUAL_SESSION"
             mode="$MANUAL_MODE"
             run_type="manual"
+            if [[ "$mode" == "poll" && "$MANUAL_PUBLISH_PRODUCTION" == "true" ]]; then
+              deploy_production="true"
+            else
+              deploy_production="false"
+            fi
           elif [[ "$SCHEDULE" == "28 5 * * 1-5" ]]; then
             session="morning"
             mode="poll"
             run_type="scheduled"
+            deploy_production="true"
           elif [[ "$SCHEDULE" == "57 9 * * 1-5" ]]; then
             session="evening"
             mode="poll"
             run_type="scheduled"
+            deploy_production="true"
           else
             echo "Unknown trigger" >&2
+            exit 1
+          fi
+          if [[ "$run_type" == "manual" && "$mode" == "poll" && "$deploy_production" != "true" ]]; then
+            echo "Manual poll mode requires publish_production=true" >&2
             exit 1
           fi
           echo "session=$session" >> "$GITHUB_OUTPUT"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "run_type=$run_type" >> "$GITHUB_OUTPUT"
+          echo "deploy_production=$deploy_production" >> "$GITHUB_OUTPUT"
 
           {
             echo "### Myanmar 2D publication"
             echo "- Selected session: $session"
             echo "- Selected mode: $mode"
             echo "- Run type: $run_type"
+            echo "- Deploy production files: $deploy_production"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect and build static JSON
@@ -101,23 +120,34 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           SELECTED_SESSION: ${{ steps.selection.outputs.session }}
           SELECTED_MODE: ${{ steps.selection.outputs.mode }}
+          EXPECTED_SESSION: ${{ steps.selection.outputs.session }}
         run: |
           if [[ "$SELECTED_MODE" == "once" ]]; then
-            python github_publisher.py --window "$SELECTED_SESSION" --once
+            python github_publisher.py --window "$SELECTED_SESSION" --once \
+              --artifact-path "$RUNNER_TEMP/smoke-result.json"
           else
             python github_publisher.py --window "$SELECTED_SESSION"
           fi
 
       - name: Configure GitHub Pages
+        if: >-
+          steps.selection.outputs.deploy_production == 'true' &&
+          (github.event_name == 'schedule' || inputs.publish_production == true)
         uses: actions/configure-pages@v5
-        with: 
+        with:
           enablement: true
 
       - name: Upload public directory only
+        if: >-
+          steps.selection.outputs.deploy_production == 'true' &&
+          (github.event_name == 'schedule' || inputs.publish_production == true)
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
       - name: Deploy GitHub Pages
+        if: >-
+          steps.selection.outputs.deploy_production == 'true' &&
+          (github.event_name == 'schedule' || inputs.publish_production == true)
         id: deployment
         uses: actions/deploy-pages@v4

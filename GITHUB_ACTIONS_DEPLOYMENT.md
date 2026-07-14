@@ -19,8 +19,9 @@ Concurrency prevents morning, evening, and manual runs from overlapping. Generat
 2. Open **Settings -> Pages**.
 3. Under **Build and deployment**, select **GitHub Actions** as the source.
 4. Open **Actions** and enable workflows if the repository policy requires it.
-5. Run **Publish Myanmar 2D** manually once, selecting `morning` or `evening`.
-6. Confirm the `github-pages` environment deployment succeeds.
+5. Use the default manual `once` mode to smoke-test collection without deploying.
+6. To perform an intentional production poll, select `poll` and enable
+   `publish_production`. The run must still occur inside the selected result window.
 
 The workflow uses only:
 
@@ -41,7 +42,7 @@ If the Pages URL differs, set the workflow environment variable `PUBLISHED_BASE_
 
 ## Static data
 
-- `public/latest.json` contains the current verified result.
+- `public/latest.json` contains only the latest captured scheduled result.
 - `public/history.json` contains at most 100 unique results, newest first.
 - `public/index.html` is a dependency-free responsive viewer.
 
@@ -65,7 +66,16 @@ fetch(`latest.json?t=${Date.now()}`, { cache: "no-store" })
 
 ## Manual operation
 
-From **Actions -> Publish Myanmar 2D -> Run workflow**, select the desired window. Manual window runs use the same five-minute polling and source-time validation as scheduled runs.
+From **Actions -> Publish Myanmar 2D -> Run workflow**, select the desired session.
+The default `once` mode is a smoke test: it fetches and calculates the current data,
+writes only a runner-temporary artifact, and skips all GitHub Pages deployment steps.
+
+Manual production recovery requires all of the following:
+
+- select `poll` mode;
+- set `publish_production` to `true`;
+- run inside the selected weekday session window;
+- capture a changed source timestamp on that date at or after the target.
 
 Local debugging without deploying:
 
@@ -73,7 +83,12 @@ Local debugging without deploying:
 python github_publisher.py --once
 ```
 
-This writes local `public/latest.json` and `public/history.json`. It does not call the GitHub API or deploy Pages.
+This prints a normalized smoke result and never writes `public/latest.json` or
+`public/history.json`. An optional non-public artifact can be written with:
+
+```bash
+python github_publisher.py --window morning --once --artifact-path .tmp/smoke.json
+```
 
 ## Security and artifacts
 
