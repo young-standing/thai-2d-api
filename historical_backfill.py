@@ -27,6 +27,7 @@ from github_publisher import (
     _default_base_url,
     _remote_json,
     merge_public_history,
+    record_identity,
     validate_public_record,
 )
 
@@ -36,6 +37,7 @@ TIMEOUT_SECONDS = 15
 MAX_ATTEMPTS = 4
 RATE_LIMIT_SECONDS = 0.5
 RETRY_STATUSES = {429, 500, 502, 503, 504}
+HISTORY_FILENAMES = ("history-all.json", "history-30-days.json", "history.json")
 DISPLAY_NUMBER = re.compile(r"^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$")
 TWO_DIGITS = re.compile(r"^\d{2}$")
 
@@ -428,7 +430,7 @@ class HistoricalBackfillImporter:
             "rejection_reasons": {},
         }
 
-    def _published(self, filename: str) -> Any:
+    def _published_optional(self, filename: str) -> Any:
         if not self.base_url:
             raise HistoricalBackfillError(
                 "Published Pages base URL is not configured",
@@ -436,40 +438,68 @@ class HistoricalBackfillImporter:
             )
         try:
             return self.remote_loader(urljoin(self.base_url, filename))
+        except FileNotFoundError:
+            return None
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                return None
+            raise HistoricalBackfillError(
+                f"Could not load existing published {filename}",
+                category="published_data_error",
+            ) from exc
         except Exception as exc:
             raise HistoricalBackfillError(
                 f"Could not load existing published {filename}",
                 category="published_data_error",
             ) from exc
 
-    def _existing_records(self) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        latest = validate_public_record(self._published("latest.json"))
-        if latest is None or latest["publication_type"] != "scheduled_result":
-            raise HistoricalBackfillError(
-                "Published latest.json is not an official scheduled result",
-                category="published_data_error",
-            )
-        raw_history = self._published("history.json")
-        if not isinstance(raw_history, list):
-            raise HistoricalBackfillError(
-                "Published history.json must be a list",
-                category="published_data_error",
-            )
+    def _existing_records(self) -> tuple[Any, list[dict[str, Any]]]:
+        raw_latest = self._published_optional("latest.json")
+        latest = validate_public_record(raw_latest)
         validated: list[dict[str, Any]] = []
-        for item in raw_history:
-            record = validate_public_record(item)
-            if record is None:
-                raise HistoricalBackfillError(
-                    "Published history.json contains an invalid record",
-                    category="published_data_error",
-                )
-            validated.append(record)
-        return latest, merge_public_history(validated)
+        if latest is not None and latest["publication_type"] == "scheduled_result":
+            validated.append(latest)
+            self.report["latest_input"] = "scheduled_result"
+        else:
+            if raw_latest is None:
+                reason = "missing"
+            elif raw_latest in ({}, "", []):
+                reason = "empty"
+            elif isinstance(raw_latest, dict) and "publication_type" not in raw_latest:
+                reason = "legacy_schema"
+            else:
+                reason = "nonproduction"
+            self.report["latest_input"] = f"ignored_{reason}"
+            self.log(
+                "legacy_or_nonproduction_latest_ignored",
+                endpoint_host=SOURCE_NAME,
+                reason=reason,
+            )
+
+        for filename in HISTORY_FILENAMES:
+            raw_history = self._published_optional(filename)
+            if raw_history is None:
+                self.log("published_history_missing", filename=filename)
+                continue
+            if not isinstance(raw_history, list):
+                self.log("invalid_published_history_ignored", filename=filename)
+                continue
+            file_records: list[dict[str, Any]] = []
+            for item in raw_history:
+                record = validate_public_record(item)
+                if record is None:
+                    file_records = []
+                    self.log("invalid_published_history_ignored", filename=filename)
+                    break
+                file_records.append(record)
+            validated.extend(file_records)
+        return raw_latest, merge_public_history(validated, limit=None)
 
     def _write_artifact(
         self,
-        latest: dict[str, Any],
-        history: list[dict[str, Any]],
+        raw_latest: Any,
+        history_all: list[dict[str, Any]],
+        history_30_days: list[dict[str, Any]],
     ) -> None:
         index_source = self.static_dir / "index.html"
         if not index_source.is_file():
@@ -483,12 +513,25 @@ class HistoricalBackfillImporter:
         try:
             parent.mkdir(parents=True, exist_ok=True)
             staging = Path(tempfile.mkdtemp(prefix=f".{self.output_dir.name}-", dir=parent))
-            for filename, document in {"latest.json": latest, "history.json": history}.items():
+            documents = {
+                "history-all.json": history_all,
+                "history-30-days.json": history_30_days,
+                "history.json": history_30_days,
+            }
+            for filename, document in documents.items():
                 (staging / filename).write_text(
                     json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
                     encoding="utf-8",
                 )
             shutil.copyfile(index_source, staging / "index.html")
+            existing_latest = self.output_dir / "latest.json"
+            if existing_latest.is_file():
+                shutil.copyfile(existing_latest, staging / "latest.json")
+            elif raw_latest is not None:
+                (staging / "latest.json").write_text(
+                    json.dumps(raw_latest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
 
             if self.output_dir.exists():
                 backup = Path(tempfile.mkdtemp(prefix=f".{self.output_dir.name}-backup-", dir=parent))
@@ -555,7 +598,7 @@ class HistoricalBackfillImporter:
         rejection_reasons: Counter[str] = Counter()
         imported: list[dict[str, Any]] = []
         try:
-            latest, history = self._existing_records()
+            raw_latest, history = self._existing_records()
             for offset in range(days):
                 if offset:
                     self.sleep(self.rate_limit_seconds)
@@ -567,6 +610,18 @@ class HistoricalBackfillImporter:
                 )
                 payload = self.client.fetch_date(requested_date)
                 parsed = parse_historical_day(payload, requested_date, imported_at)
+                for record in parsed.records:
+                    validated_record = validate_public_record(record)
+                    if (
+                        validated_record is None
+                        or validated_record["publication_type"] != "historical_backfill"
+                        or validated_record["source"] != SOURCE_NAME
+                        or validated_record["verified_locally"] is not True
+                    ):
+                        raise HistoricalBackfillError(
+                            "A backfilled record failed independent validation",
+                            category="backfill_record_validation_error",
+                        )
                 imported.extend(parsed.records)
                 rejection_reasons.update(parsed.rejection_reasons)
                 self.report["dates_completed"] += 1
@@ -595,13 +650,19 @@ class HistoricalBackfillImporter:
                     category="no_valid_records",
                 )
 
-            merged = merge_public_history([*history, *imported])
-            self._write_artifact(latest, merged)
+            history_all = merge_public_history([*history, *imported], limit=None)
+            history_30_days = [
+                record
+                for record in history_all
+                if first_date <= date.fromisoformat(record_identity(record)[0]) <= final_date
+            ]
+            self._write_artifact(raw_latest, history_all, history_30_days)
             self.report.update(
                 {
                     "status": "success",
                     "records_imported": len(imported),
-                    "history_records": len(merged),
+                    "history_records": len(history_30_days),
+                    "history_all_records": len(history_all),
                     "history_limit": MAX_HISTORY,
                 }
             )
@@ -612,7 +673,8 @@ class HistoricalBackfillImporter:
                 records_accepted=self.report["records_accepted"],
                 records_rejected=self.report["records_rejected"],
                 rejection_reasons=self.report["rejection_reasons"],
-                history_records=len(merged),
+                history_records=len(history_30_days),
+                history_all_records=len(history_all),
             )
             return dict(self.report)
         except HistoricalBackfillError as exc:

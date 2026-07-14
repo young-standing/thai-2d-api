@@ -193,7 +193,11 @@ def _record_timestamp(record: dict[str, Any]) -> datetime:
     return datetime.fromisoformat(record["market_datetime"]).astimezone(timezone.utc)
 
 
-def merge_public_history(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def merge_public_history(
+    records: list[dict[str, Any]],
+    *,
+    limit: int | None = MAX_HISTORY,
+) -> list[dict[str, Any]]:
     merged: dict[tuple[str, str], dict[str, Any]] = {}
     for record in records:
         key = record_identity(record)
@@ -203,7 +207,8 @@ def merge_public_history(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             and existing["publication_type"] != "scheduled_result"
         ):
             merged[key] = record
-    return sorted(merged.values(), key=_record_timestamp, reverse=True)[:MAX_HISTORY]
+    ordered = sorted(merged.values(), key=_record_timestamp, reverse=True)
+    return ordered if limit is None else ordered[:limit]
 
 
 def validate_history(value: Any) -> list[dict[str, Any]]:

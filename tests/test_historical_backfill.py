@@ -317,15 +317,106 @@ class FakeHistoryClient:
         return outcome
 
 
-def remote_loader(latest, history):
+def remote_loader(latest, history=None, *, history_all=None, history_30_days=None):
     def load(url):
         if url.endswith("latest.json"):
             return latest
+        if url.endswith("history-all.json"):
+            return history_all
+        if url.endswith("history-30-days.json"):
+            return history_30_days
         if url.endswith("history.json"):
             return history
         raise AssertionError(url)
 
     return load
+
+
+def run_first_backfill(tmp_path, *, latest, output_dir=None, log=None):
+    static = tmp_path / "static"
+    static.mkdir(exist_ok=True)
+    (static / "index.html").write_text("<html></html>")
+    output = output_dir or (tmp_path / "artifact")
+    importer = HistoricalBackfillImporter(
+        FakeHistoryClient({RESULT_DATE: payload(source_record())}),
+        output_dir=output,
+        static_dir=static,
+        remote_loader=remote_loader(latest),
+        base_url="https://example.test/",
+        now=lambda: datetime(2025, 7, 11, 18, 0, tzinfo=YANGON),
+        sleep=lambda _: None,
+        log=log or (lambda *args, **kwargs: None),
+    )
+    report = importer.run(days=1)
+    return report, output
+
+
+def test_missing_latest_json_is_ignored_for_first_backfill(tmp_path):
+    events = []
+
+    def log(event, **fields):
+        events.append((event, fields))
+
+    report, output = run_first_backfill(tmp_path, latest=None, log=log)
+    assert report["status"] == "success"
+    assert not (output / "latest.json").exists()
+    assert (
+        "legacy_or_nonproduction_latest_ignored",
+        {"endpoint_host": "api.thaistock2d.com", "reason": "missing"},
+    ) in events
+
+
+def test_legacy_latest_without_publication_type_is_ignored_not_converted(tmp_path):
+    legacy = {"number": "17", "market_datetime": "2025-07-11T12:01:00+06:30"}
+    report, output = run_first_backfill(tmp_path, latest=legacy)
+    assert report["latest_input"] == "ignored_legacy_schema"
+    assert json.loads((output / "latest.json").read_text()) == legacy
+    history = json.loads((output / "history-all.json").read_text())
+    assert all(record["publication_type"] == "historical_backfill" for record in history)
+
+
+def test_manual_latest_is_ignored_not_added_to_history(tmp_path):
+    manual = {
+        "number": "17",
+        "publication_type": "smoke_test",
+        "market_datetime": "2025-07-11T12:01:00+06:30",
+    }
+    report, output = run_first_backfill(tmp_path, latest=manual)
+    assert report["latest_input"] == "ignored_nonproduction"
+    assert json.loads((output / "latest.json").read_text()) == manual
+    history = json.loads((output / "history-all.json").read_text())
+    assert not any(record["publication_type"] == "smoke_test" for record in history)
+
+
+def test_valid_scheduled_latest_is_retained_with_priority(tmp_path):
+    latest = official_record()
+    report, output = run_first_backfill(tmp_path, latest=latest)
+    assert report["latest_input"] == "scheduled_result"
+    assert json.loads((output / "latest.json").read_text()) == latest
+    history = json.loads((output / "history-all.json").read_text())
+    assert len(history) == 1
+    assert history[0]["publication_type"] == "scheduled_result"
+
+
+def test_first_deployment_creates_all_history_files_from_empty_history(tmp_path):
+    _, output = run_first_backfill(tmp_path, latest=None)
+    for filename in ("history-all.json", "history-30-days.json", "history.json"):
+        records = json.loads((output / filename).read_text())
+        assert len(records) == 1
+        assert records[0]["publication_type"] == "historical_backfill"
+
+
+def test_successful_backfill_preserves_existing_latest_bytes(tmp_path):
+    output = tmp_path / "artifact"
+    output.mkdir()
+    original = '{\n  "publication_type": "smoke_test",\n  "number": "09"\n}\n'
+    (output / "latest.json").write_text(original)
+    run_first_backfill(
+        tmp_path,
+        latest={"publication_type": "smoke_test", "number": "99"},
+        output_dir=output,
+    )
+    assert (output / "latest.json").read_text() == original
 
 
 def test_importer_preserves_official_latest_and_priority(tmp_path):
@@ -346,8 +437,12 @@ def test_importer_preserves_official_latest_and_priority(tmp_path):
     report = importer.run(days=1)
     saved_latest = json.loads((tmp_path / "artifact/latest.json").read_text())
     saved_history = json.loads((tmp_path / "artifact/history.json").read_text())
+    saved_history_all = json.loads((tmp_path / "artifact/history-all.json").read_text())
+    saved_history_30 = json.loads((tmp_path / "artifact/history-30-days.json").read_text())
     assert saved_latest == latest
     assert len(saved_history) == 1
+    assert saved_history == saved_history_30
+    assert saved_history_all == saved_history
     assert saved_history[0]["publication_type"] == "scheduled_result"
     assert report["records_imported"] == 1
 

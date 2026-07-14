@@ -43,7 +43,9 @@ If the Pages URL differs, set the workflow environment variable `PUBLISHED_BASE_
 ## Static data
 
 - `public/latest.json` contains only the latest captured scheduled result.
-- `public/history.json` contains at most 200 unique results, newest first.
+- `public/history.json` contains the rolling 30-day compatibility history.
+- `public/history-30-days.json` contains the rolling 30-day history.
+- `public/history-all.json` contains the complete validated merged history.
 - `public/index.html` is a dependency-free responsive viewer.
 
 Pages artifacts are immutable per deployment and do not preserve files automatically. Before writing a new artifact, the publisher downloads the live `history.json`, accepts only the explicit scheduled-result and verified-backfill schemas, and deduplicates by result date and session time. Official scheduled records always take priority over third-party backfills.
@@ -101,6 +103,11 @@ This API is an untrusted secondary source. It is never used for current live
 results, never changes the scheduled `latest.json` record, and cannot replace an
 official record with the same result date and session time. To run it, open the
 manual workflow and enable `publish_production` explicitly.
+
+For a first backfill, missing history files start as empty validated lists. A
+missing, legacy, or manual-smoke `latest.json` is logged and ignored for history
+purposes; it is never relabeled as an official result. If a latest file already
+exists, its content is passed through unchanged in the Pages artifact.
 
 The workflow logs only safe request diagnostics: date, endpoint host, HTTP
 status, response content type, record counts, and categorized rejection reasons.
