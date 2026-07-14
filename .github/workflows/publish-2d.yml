@@ -30,7 +30,7 @@ on:
         default: false
 
 concurrency:
-  group: github-pages-2d-publisher
+  group: github-pages-deployment
   cancel-in-progress: false
 
 permissions:

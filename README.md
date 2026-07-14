@@ -18,6 +18,21 @@ Production requires no VM, Docker runtime, continuously running API, or producti
 
 The Pages client fetches `latest.json?t=<current timestamp>` to avoid stale intermediary caches.
 
+## Thai Government Lottery 3D
+
+The separate 3D pipeline reads the official GLO first-prize number, validates it
+as exactly six ASCII digits, and publishes its final three digits without any
+integer or float conversion. It does not modify the verified Myanmar 2D rule.
+
+- Current result: <https://young-standing.github.io/thai-2d-api/latest-3d.json>
+- Recent history: <https://young-standing.github.io/thai-2d-api/history-3d.json>
+- All history: <https://young-standing.github.io/thai-2d-api/history-3d-all.json>
+
+Flutter clients should preserve `first_prize` and `three_d` as strings, append
+`?t=<current Unix milliseconds>` for cache busting, and retain cached valid data
+when a request fails. Source, workflow, schema, and operational limitations are
+documented in [THREE_D_DEPLOYMENT.md](THREE_D_DEPLOYMENT.md).
+
 ## Local setup
 
 Windows PowerShell:
