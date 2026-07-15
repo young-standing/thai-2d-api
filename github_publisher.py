@@ -23,7 +23,7 @@ YANGON = ZoneInfo("Asia/Yangon")
 BANGKOK = ZoneInfo("Asia/Bangkok")
 SessionName = Literal["morning", "evening"]
 TARGETS = {"morning": time(12, 1), "evening": time(16, 30)}
-WINDOW_ENDS = {"morning": time(12, 3, 30), "evening": time(16, 33, 30)}
+WINDOW_ENDS = {"morning": time(12, 6), "evening": time(16, 35)}
 POLL_SECONDS = 30
 MAX_HISTORY = 200
 MAX_REMOTE_BYTES = 1_000_000
@@ -190,8 +190,6 @@ def validate_public_record(value: Any) -> dict[str, Any] | None:
         )
         if not window_start <= source_yangon <= window_end:
             return None
-        if not window_start <= capture_yangon <= window_end:
-            return None
         if capture_yangon.date() != source_yangon.date():
             return None
     else:
@@ -340,7 +338,11 @@ class GitHubPublisher:
         raw_previous = self._load_published("latest.json")
         previous = validate_public_record(raw_previous)
         previous_timestamp = previous["market_datetime"] if previous else None
-        if previous_timestamp is None and isinstance(raw_previous, dict):
+        if (
+            previous_timestamp is None
+            and isinstance(raw_previous, dict)
+            and raw_previous.get("publication_type") is None
+        ):
             legacy_timestamp = raw_previous.get("market_datetime")
             if isinstance(legacy_timestamp, str):
                 try:
@@ -371,8 +373,6 @@ class GitHubPublisher:
         )
         if started.weekday() >= 5:
             raise GitHubPublisherError("Scheduled publication is allowed Monday through Friday only")
-        if started > deadline:
-            raise GitHubPublisherError("Publisher started after the scheduled collection window")
         if started < target:
             self.log(
                 {
@@ -392,10 +392,12 @@ class GitHubPublisher:
             common_log = {
                 "event": "fetch_attempt",
                 "attempt": attempt,
+                "current_utc": attempt_time.astimezone(timezone.utc).isoformat(),
                 "current_yangon": attempt_time.isoformat(),
                 "session": session,
                 "session_target_yangon": target.isoformat(),
                 "session_window_end_yangon": deadline.isoformat(),
+                "previous_published_market_datetime": previous_timestamp,
             }
             try:
                 sample = await self.client.fetch()
@@ -404,6 +406,7 @@ class GitHubPublisher:
                     {
                         **common_log,
                         "source_bangkok_timestamp": None,
+                        "source_market_datetime": None,
                         "source_yangon_timestamp": None,
                         "accepted": False,
                         "rejection_reason": f"fetch_failed:{type(exc).__name__}",
@@ -418,6 +421,9 @@ class GitHubPublisher:
                         {
                             **common_log,
                             "source_bangkok_timestamp": sample.get("marketDateTime")
+                            if isinstance(sample, dict)
+                            else None,
+                            "source_market_datetime": sample.get("marketDateTime")
                             if isinstance(sample, dict)
                             else None,
                             "source_yangon_timestamp": None,
@@ -435,6 +441,8 @@ class GitHubPublisher:
                 rejection_reason: str | None = None
                 if previous_instant is not None and source_instant == previous_instant:
                     rejection_reason = "source_timestamp_unchanged"
+                elif previous_instant is not None and source_instant < previous_instant:
+                    rejection_reason = "source_timestamp_not_newer"
                 elif source_yangon.date() != target.date():
                     rejection_reason = "wrong_yangon_date"
                 elif source_yangon < target:
@@ -443,16 +451,13 @@ class GitHubPublisher:
                     rejection_reason = "source_after_session_window"
                 elif session_key in prior_session_keys:
                     rejection_reason = "result_date_session_already_published"
-                elif captured_at < target:
-                    rejection_reason = "captured_before_session_target"
-                elif captured_at > deadline:
-                    rejection_reason = "captured_after_session_window"
 
                 self.log(
                     {
                         **common_log,
                         "current_yangon": captured_at.isoformat(),
                         "source_bangkok_timestamp": source_bangkok.isoformat(),
+                        "source_market_datetime": sample["marketDateTime"],
                         "source_yangon_timestamp": source_yangon.isoformat(),
                         "accepted": rejection_reason is None,
                         "rejection_reason": rejection_reason,

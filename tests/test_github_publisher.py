@@ -146,8 +146,8 @@ async def test_evening_capture_after_target(tmp_path):
 @pytest.mark.asyncio
 async def test_source_after_strict_window_is_rejected(tmp_path):
     prior = public_record(MORNING_SOURCE)
-    after_window = sample("2026-07-13T17:03:31+07:00")
-    clock = FakeClock(datetime(2026, 7, 13, 16, 33, tzinfo=YANGON))
+    after_window = sample("2026-07-13T17:05:01+07:00")
+    clock = FakeClock(datetime(2026, 7, 13, 16, 36, tzinfo=YANGON))
     instance = publisher(tmp_path, FakeClient([after_window]), clock, latest=prior)
     with pytest.raises(GitHubPublisherError, match="expired"):
         await instance.publish("evening")
@@ -157,8 +157,8 @@ async def test_source_after_strict_window_is_rejected(tmp_path):
 @pytest.mark.asyncio
 async def test_source_exactly_at_evening_window_end_is_accepted(tmp_path):
     prior = public_record(MORNING_SOURCE)
-    at_window_end = "2026-07-13T17:03:30+07:00"
-    clock = FakeClock(datetime(2026, 7, 13, 16, 33, 30, tzinfo=YANGON))
+    at_window_end = "2026-07-13T17:05:00+07:00"
+    clock = FakeClock(datetime(2026, 7, 13, 21, 45, tzinfo=YANGON))
     result = await publisher(
         tmp_path, FakeClient([sample(at_window_end)]), clock, latest=prior
     ).publish("evening")
@@ -254,13 +254,13 @@ async def test_manual_once_outside_collection_window_succeeds(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_scheduled_publish_started_after_window_fails(tmp_path):
-    clock = FakeClock(datetime(2026, 7, 13, 12, 3, 31, tzinfo=YANGON))
+async def test_delayed_scheduled_start_accepts_valid_source_timestamp(tmp_path):
+    clock = FakeClock(datetime(2026, 7, 13, 17, 45, tzinfo=YANGON))
     client = FakeClient([sample()])
-    with pytest.raises(GitHubPublisherError, match="started after"):
-        await publisher(tmp_path, client, clock).publish("morning")
-    assert client.calls == 0
-    assert not (tmp_path / "public/latest.json").exists()
+    result = await publisher(tmp_path, client, clock, history=[]).publish("morning")
+    assert result["market_datetime"] == MORNING_SOURCE
+    assert client.calls == 1
+    assert (tmp_path / "public/latest.json").exists()
 
 
 @pytest.mark.asyncio
@@ -348,7 +348,10 @@ async def test_attempt_log_contains_bangkok_yangon_window_and_reason(tmp_path):
     assert attempts[0]["source_bangkok_timestamp"] == "2026-07-13T12:30:59+07:00"
     assert attempts[0]["source_yangon_timestamp"] == "2026-07-13T12:00:59+06:30"
     assert attempts[0]["session_target_yangon"].endswith("T12:01:00+06:30")
-    assert attempts[0]["session_window_end_yangon"].endswith("T12:03:30+06:30")
+    assert attempts[0]["session_window_end_yangon"].endswith("T12:06:00+06:30")
+    assert attempts[0]["current_utc"].endswith("+00:00")
+    assert "previous_published_market_datetime" in attempts[0]
+    assert attempts[0]["source_market_datetime"] == "2026-07-13T12:30:59+07:00"
     assert attempts[0]["rejection_reason"] == "source_before_session_target"
     assert attempts[0]["decision_reason"] == "source_before_session_target"
     assert attempts[1]["accepted"] is True
