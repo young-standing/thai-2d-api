@@ -2,9 +2,9 @@ name: Publish Myanmar 2D
 
 on:
   schedule:
-    # Asia/Yangon is UTC+06:30. Run slightly before each result window.
-    - cron: "28 5 * * 1-5"  # 11:58 Yangon
-    - cron: "57 9 * * 1-5"  # 16:27 Yangon
+    # Start early enough for runner setup; the publisher waits until the strict target.
+    - cron: "20 5 * * 1-5"  # 11:50 Yangon
+    - cron: "50 9 * * 1-5"  # 16:20 Yangon
   workflow_dispatch:
     inputs:
       session:
@@ -82,12 +82,12 @@ jobs:
             else
               deploy_production="false"
             fi
-          elif [[ "$SCHEDULE" == "28 5 * * 1-5" ]]; then
+          elif [[ "$SCHEDULE" == "20 5 * * 1-5" ]]; then
             session="morning"
             mode="poll"
             run_type="scheduled"
             deploy_production="true"
-          elif [[ "$SCHEDULE" == "57 9 * * 1-5" ]]; then
+          elif [[ "$SCHEDULE" == "50 9 * * 1-5" ]]; then
             session="evening"
             mode="poll"
             run_type="scheduled"
@@ -113,7 +113,34 @@ jobs:
             echo "- Deploy production files: $deploy_production"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Print workflow diagnostics
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          SELECTED_SESSION: ${{ steps.selection.outputs.session }}
+          SELECTED_MODE: ${{ steps.selection.outputs.mode }}
+        run: |
+          utc_start="$(date -u --iso-8601=seconds)"
+          yangon_start="$(TZ=Asia/Yangon date --iso-8601=seconds)"
+          echo "github.event_name=$EVENT_NAME"
+          echo "github.event.schedule=$EVENT_SCHEDULE"
+          echo "selected_session=$SELECTED_SESSION"
+          echo "selected_mode=$SELECTED_MODE"
+          echo "utc_start_time=$utc_start"
+          echo "yangon_start_time=$yangon_start"
+          {
+            echo "### Workflow diagnostics"
+            echo "- github.event_name: $EVENT_NAME"
+            echo "- github.event.schedule: ${EVENT_SCHEDULE:-manual}"
+            echo "- Selected session: $SELECTED_SESSION"
+            echo "- Selected mode: $SELECTED_MODE"
+            echo "- UTC start time: $utc_start"
+            echo "- Yangon start time: $yangon_start"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Collect and build static JSON
+        id: collection
         shell: bash
         env:
           HEADLESS: "true"
@@ -125,12 +152,21 @@ jobs:
           if [[ "$SELECTED_MODE" == "once" ]]; then
             python github_publisher.py --window "$SELECTED_SESSION" --once \
               --artifact-path "$RUNNER_TEMP/smoke-result.json"
+            echo "production_published=false" >> "$GITHUB_OUTPUT"
           else
-            python github_publisher.py --window "$SELECTED_SESSION"
+            marker="$RUNNER_TEMP/production-published.json"
+            rm -f "$marker"
+            python github_publisher.py --window "$SELECTED_SESSION" \
+              --success-marker "$marker"
+            test -s "$marker"
+            python -c "import json,sys; value=json.load(open(sys.argv[1], encoding='utf-8')); assert value.get('production_published') is True" "$marker"
+            echo "production_published=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Configure GitHub Pages
         if: >-
+          success() &&
+          steps.collection.outputs.production_published == 'true' &&
           steps.selection.outputs.deploy_production == 'true' &&
           (github.event_name == 'schedule' || inputs.publish_production == true)
         uses: actions/configure-pages@v5
@@ -139,6 +175,8 @@ jobs:
 
       - name: Upload public directory only
         if: >-
+          success() &&
+          steps.collection.outputs.production_published == 'true' &&
           steps.selection.outputs.deploy_production == 'true' &&
           (github.event_name == 'schedule' || inputs.publish_production == true)
         uses: actions/upload-pages-artifact@v3
@@ -147,6 +185,8 @@ jobs:
 
       - name: Deploy GitHub Pages
         if: >-
+          success() &&
+          steps.collection.outputs.production_published == 'true' &&
           steps.selection.outputs.deploy_production == 'true' &&
           (github.event_name == 'schedule' || inputs.publish_production == true)
         id: deployment

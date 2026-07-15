@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -37,6 +38,8 @@ def sample(
 
 def public_record(market_datetime, *, session="morning", number="55", stale=False):
     target = "12:01:00" if session == "morning" else "16:30:00"
+    source_yangon = datetime.fromisoformat(market_datetime).astimezone(YANGON)
+    captured = source_yangon + timedelta(seconds=5)
     return {
         "number": number,
         "index_digit": number[0],
@@ -51,7 +54,7 @@ def public_record(market_datetime, *, session="morning", number="55", stale=Fals
         "strategy": "set_hundredths_plus_value_million_units",
         "session": session,
         "target_time_yangon": target,
-        "captured_at_yangon": "2026-07-13T12:01:05+06:30",
+        "captured_at_yangon": captured.isoformat(),
         "source_market_datetime": market_datetime,
         "publication_type": "scheduled_result",
         "stale": stale,
@@ -93,7 +96,7 @@ def loader(latest=None, history=None):
     return load
 
 
-def publisher(tmp_path, client, clock, *, latest=None, history=None):
+def publisher(tmp_path, client, clock, *, latest=None, history=None, logs=None):
     return GitHubPublisher(
         client,
         output_dir=tmp_path / "public",
@@ -101,7 +104,18 @@ def publisher(tmp_path, client, clock, *, latest=None, history=None):
         now=clock.now,
         sleep=clock.sleep,
         base_url="https://young-standing.github.io/thai-2d-api/",
+        log=logs.append if logs is not None else lambda _: None,
     )
+
+
+@pytest.mark.asyncio
+async def test_morning_capture_exactly_at_target(tmp_path):
+    clock = FakeClock(datetime(2026, 7, 13, 12, 1, tzinfo=YANGON))
+    result = await publisher(
+        tmp_path, FakeClient([sample(MORNING_SOURCE)]), clock, history=[]
+    ).publish("morning", expected_session="morning")
+    assert result["market_datetime"] == MORNING_SOURCE
+    assert datetime.fromisoformat(MORNING_SOURCE).astimezone(YANGON).time().isoformat() == "12:01:00"
 
 
 @pytest.mark.asyncio
@@ -126,6 +140,28 @@ async def test_evening_capture_after_target(tmp_path):
         tmp_path, FakeClient([sample(after_target)]), clock, latest=prior, history=[prior]
     ).publish("evening")
     assert result["market_datetime"] == after_target
+
+
+@pytest.mark.asyncio
+async def test_source_after_strict_window_is_rejected(tmp_path):
+    prior = public_record(MORNING_SOURCE)
+    after_window = sample("2026-07-13T17:03:31+07:00")
+    clock = FakeClock(datetime(2026, 7, 13, 16, 33, tzinfo=YANGON))
+    instance = publisher(tmp_path, FakeClient([after_window]), clock, latest=prior)
+    with pytest.raises(GitHubPublisherError, match="expired"):
+        await instance.publish("evening")
+    assert not (tmp_path / "public/latest.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_source_exactly_at_evening_window_end_is_accepted(tmp_path):
+    prior = public_record(MORNING_SOURCE)
+    at_window_end = "2026-07-13T17:03:30+07:00"
+    clock = FakeClock(datetime(2026, 7, 13, 16, 33, 30, tzinfo=YANGON))
+    result = await publisher(
+        tmp_path, FakeClient([sample(at_window_end)]), clock, latest=prior
+    ).publish("evening")
+    assert result["market_datetime"] == at_window_end
 
 
 @pytest.mark.asyncio
@@ -158,6 +194,38 @@ async def test_unchanged_timestamp_is_rejected(tmp_path):
     with pytest.raises(GitHubPublisherError, match="expired"):
         await instance.publish("evening")
     assert not (tmp_path / "public/latest.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_existing_result_date_and_session_is_rejected(tmp_path):
+    prior = public_record("2026-07-13T12:31:00+07:00", session="morning")
+    changed_same_session = sample("2026-07-13T12:31:30+07:00")
+    clock = FakeClock(datetime(2026, 7, 13, 12, 1, 30, tzinfo=YANGON))
+    instance = publisher(
+        tmp_path,
+        FakeClient([changed_same_session]),
+        clock,
+        latest=prior,
+        history=[prior],
+    )
+    with pytest.raises(GitHubPublisherError, match="expired"):
+        await instance.publish("morning")
+    assert not (tmp_path / "public/latest.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_old_off_window_latest_does_not_block_valid_capture(tmp_path):
+    invalid_old = public_record("2026-07-13T15:00:00+07:00", session="morning")
+    assert invalid_old["market_datetime"] != MORNING_SOURCE
+    clock = FakeClock(datetime(2026, 7, 13, 12, 1, tzinfo=YANGON))
+    result = await publisher(
+        tmp_path,
+        FakeClient([sample(MORNING_SOURCE)]),
+        clock,
+        latest=invalid_old,
+        history=[invalid_old],
+    ).publish("morning")
+    assert result["market_datetime"] == MORNING_SOURCE
 
 
 @pytest.mark.asyncio
@@ -213,6 +281,57 @@ async def test_scheduled_success_updates_latest_and_history(tmp_path):
         MORNING_SOURCE,
         prior["market_datetime"],
     ]
+
+
+@pytest.mark.asyncio
+async def test_success_marker_written_only_after_valid_files(tmp_path):
+    marker = tmp_path / "production-published.json"
+    clock = FakeClock(datetime(2026, 7, 13, 12, 1, tzinfo=YANGON))
+    instance = publisher(tmp_path, FakeClient([sample()]), clock, history=[])
+    record = await instance.publish("morning")
+    instance.write_success_marker(marker, record)
+    assert json.loads(marker.read_text()) == {
+        "market_datetime": MORNING_SOURCE,
+        "production_published": True,
+        "session": "morning",
+    }
+
+
+@pytest.mark.asyncio
+async def test_failed_collection_never_creates_success_marker(tmp_path):
+    marker = tmp_path / "production-published.json"
+    clock = FakeClock(datetime(2026, 7, 13, 12, 3, tzinfo=YANGON))
+    instance = publisher(tmp_path, FakeClient([RuntimeError("down")]), clock)
+    with pytest.raises(GitHubPublisherError, match="not changed"):
+        await instance.publish("morning")
+    assert not marker.exists()
+
+
+def test_stale_success_marker_is_removed_before_collection(tmp_path):
+    marker = tmp_path / "production-published.json"
+    marker.write_text('{"production_published": true}', encoding="utf-8")
+    clock = FakeClock(datetime(2026, 7, 13, 12, 1, tzinfo=YANGON))
+    instance = publisher(tmp_path, FakeClient([sample()]), clock)
+    assert instance.clear_success_marker(marker) == marker.resolve()
+    assert not marker.exists()
+
+
+@pytest.mark.asyncio
+async def test_attempt_log_contains_bangkok_yangon_window_and_reason(tmp_path):
+    logs = []
+    before = sample("2026-07-13T12:30:59+07:00")
+    clock = FakeClock(datetime(2026, 7, 13, 12, 1, tzinfo=YANGON))
+    instance = publisher(tmp_path, FakeClient([before, sample()]), clock, logs=logs)
+    await instance.publish("morning")
+    attempts = [item for item in logs if item["event"] == "fetch_attempt"]
+    assert attempts[0]["source_bangkok_timestamp"] == "2026-07-13T12:30:59+07:00"
+    assert attempts[0]["source_yangon_timestamp"] == "2026-07-13T12:00:59+06:30"
+    assert attempts[0]["session_target_yangon"].endswith("T12:01:00+06:30")
+    assert attempts[0]["session_window_end_yangon"].endswith("T12:03:30+06:30")
+    assert attempts[0]["rejection_reason"] == "source_before_session_target"
+    assert attempts[0]["decision_reason"] == "source_before_session_target"
+    assert attempts[1]["accepted"] is True
+    assert attempts[1]["decision_reason"] == "accepted"
 
 
 @pytest.mark.asyncio
@@ -303,7 +422,7 @@ async def test_leading_zero_result_and_metadata(tmp_path):
 
 @pytest.mark.asyncio
 async def test_history_is_newest_first_and_limited_to_200(tmp_path):
-    base = datetime(2025, 12, 1, 9, 0, tzinfo=YANGON)
+    base = datetime(2025, 12, 1, 12, 1, tzinfo=YANGON)
     history = [
         public_record((base + timedelta(days=index)).isoformat())
         for index in range(200)
@@ -322,6 +441,21 @@ def test_safe_static_output_paths(tmp_path):
     instance = publisher(tmp_path, FakeClient([sample()]), clock)
     with pytest.raises(GitHubPublisherError, match="Unsafe"):
         instance._path("../secret.json")
+
+
+def test_workflow_deploys_only_after_explicit_production_marker():
+    workflow = (
+        Path(__file__).parents[1]
+        / ".github/workflows/publish-2d.yml"
+    ).read_text(encoding="utf-8")
+    assert "id: collection" in workflow
+    assert "--success-marker \"$marker\"" in workflow
+    assert "production_published=true" in workflow
+    assert workflow.count("steps.collection.outputs.production_published == 'true'") == 3
+    assert workflow.count("success() &&") >= 3
+    assert "github.event_name=$EVENT_NAME" in workflow
+    assert "github.event.schedule=$EVENT_SCHEDULE" in workflow
+    assert 'mode="poll"' in workflow
 
 
 @pytest.mark.asyncio
