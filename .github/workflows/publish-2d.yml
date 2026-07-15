@@ -16,13 +16,13 @@ on:
           - morning
           - evening
       mode:
-        description: Smoke test once or poll for a production result
+        description: Smoke test once or explicitly publish a production result
         required: true
         type: choice
         default: once
         options:
           - once
-          - poll
+          - publish
       publish_production:
         description: Allow a manual poll run to deploy production files
         required: true
@@ -77,27 +77,30 @@ jobs:
             session="$MANUAL_SESSION"
             mode="$MANUAL_MODE"
             run_type="manual"
-            if [[ "$mode" == "poll" && "$MANUAL_PUBLISH_PRODUCTION" == "true" ]]; then
+            if [[ "$mode" == "publish" && "$MANUAL_PUBLISH_PRODUCTION" == "true" ]]; then
               deploy_production="true"
-            else
+            elif [[ "$mode" == "once" ]]; then
               deploy_production="false"
+            else
+              echo "Manual publish mode requires publish_production=true" >&2
+              exit 1
             fi
           elif [[ "$SCHEDULE" == "20 5 * * 1-5" ]]; then
             session="morning"
-            mode="poll"
+            mode="publish"
             run_type="scheduled"
             deploy_production="true"
           elif [[ "$SCHEDULE" == "50 9 * * 1-5" ]]; then
             session="evening"
-            mode="poll"
+            mode="publish"
             run_type="scheduled"
             deploy_production="true"
           else
             echo "Unknown trigger" >&2
             exit 1
           fi
-          if [[ "$run_type" == "manual" && "$mode" == "poll" && "$deploy_production" != "true" ]]; then
-            echo "Manual poll mode requires publish_production=true" >&2
+          if [[ "$mode" != "once" && "$mode" != "publish" ]]; then
+            echo "Unknown mode: $mode" >&2
             exit 1
           fi
           echo "session=$session" >> "$GITHUB_OUTPUT"
@@ -148,24 +151,33 @@ jobs:
           SELECTED_SESSION: ${{ steps.selection.outputs.session }}
           SELECTED_MODE: ${{ steps.selection.outputs.mode }}
           EXPECTED_SESSION: ${{ steps.selection.outputs.session }}
+          GITHUB_SCHEDULE: ${{ github.event.schedule }}
+          PRODUCTION_SUCCESS_MARKER: ${{ runner.temp }}/production-published.json
         run: |
+          echo "SELECTED_SESSION=$SELECTED_SESSION"
+          echo "SELECTED_MODE=$SELECTED_MODE"
           if [[ "$SELECTED_MODE" == "once" ]]; then
-            python github_publisher.py --window "$SELECTED_SESSION" --once \
-              --artifact-path "$RUNNER_TEMP/smoke-result.json"
+            python github_publisher.py \
+              --window "$SELECTED_SESSION" \
+              --once
             echo "production_published=false" >> "$GITHUB_OUTPUT"
-          else
-            marker="$RUNNER_TEMP/production-published.json"
-            rm -f "$marker"
-            python github_publisher.py --window "$SELECTED_SESSION" \
-              --success-marker "$marker"
-            test -s "$marker"
-            python -c "import json,sys; value=json.load(open(sys.argv[1], encoding='utf-8')); assert value.get('production_published') is True" "$marker"
+          elif [[ "$SELECTED_MODE" == "publish" ]]; then
+            rm -f "$PRODUCTION_SUCCESS_MARKER"
+            python github_publisher.py \
+              --window "$SELECTED_SESSION" \
+              --publish-production
+            test -s "$PRODUCTION_SUCCESS_MARKER"
+            python -c "import json,sys; value=json.load(open(sys.argv[1], encoding='utf-8')); assert value.get('production_published') is True" "$PRODUCTION_SUCCESS_MARKER"
             echo "production_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unknown mode: $SELECTED_MODE" >&2
+            exit 1
           fi
 
       - name: Configure GitHub Pages
         if: >-
           success() &&
+          steps.selection.outputs.mode == 'publish' &&
           steps.collection.outputs.production_published == 'true' &&
           steps.selection.outputs.deploy_production == 'true' &&
           (github.event_name == 'schedule' || inputs.publish_production == true)
@@ -176,6 +188,7 @@ jobs:
       - name: Upload public directory only
         if: >-
           success() &&
+          steps.selection.outputs.mode == 'publish' &&
           steps.collection.outputs.production_published == 'true' &&
           steps.selection.outputs.deploy_production == 'true' &&
           (github.event_name == 'schedule' || inputs.publish_production == true)
@@ -186,6 +199,7 @@ jobs:
       - name: Deploy GitHub Pages
         if: >-
           success() &&
+          steps.selection.outputs.mode == 'publish' &&
           steps.collection.outputs.production_published == 'true' &&
           steps.selection.outputs.deploy_production == 'true' &&
           (github.event_name == 'schedule' || inputs.publish_production == true)

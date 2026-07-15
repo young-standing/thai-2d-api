@@ -9,6 +9,7 @@ from github_publisher import (
     GitHubPublisher,
     GitHubPublisherError,
     YANGON,
+    _arguments,
     expected_scheduled_result,
     is_scheduled_result_stale,
 )
@@ -243,6 +244,26 @@ async def test_manual_once_does_not_modify_public_files(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_manual_once_outside_collection_window_succeeds(tmp_path):
+    clock = FakeClock(datetime(2026, 7, 13, 3, 15, tzinfo=YANGON))
+    client = FakeClient([sample("2026-07-12T22:00:00+07:00")])
+    result = await publisher(tmp_path, client, clock).smoke("morning")
+    assert result["publication_type"] == "smoke_test"
+    assert client.calls == 1
+    assert not (tmp_path / "public/latest.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_scheduled_publish_started_after_window_fails(tmp_path):
+    clock = FakeClock(datetime(2026, 7, 13, 12, 3, 31, tzinfo=YANGON))
+    client = FakeClient([sample()])
+    with pytest.raises(GitHubPublisherError, match="started after"):
+        await publisher(tmp_path, client, clock).publish("morning")
+    assert client.calls == 0
+    assert not (tmp_path / "public/latest.json").exists()
+
+
+@pytest.mark.asyncio
 async def test_manual_once_can_write_non_public_artifact(tmp_path):
     clock = FakeClock(datetime(2026, 7, 13, 14, 0, tzinfo=YANGON))
     artifact = tmp_path / "artifacts/smoke.json"
@@ -449,13 +470,56 @@ def test_workflow_deploys_only_after_explicit_production_marker():
         / ".github/workflows/publish-2d.yml"
     ).read_text(encoding="utf-8")
     assert "id: collection" in workflow
-    assert "--success-marker \"$marker\"" in workflow
+    assert "--publish-production" in workflow
+    assert "PRODUCTION_SUCCESS_MARKER: ${{ runner.temp }}/production-published.json" in workflow
     assert "production_published=true" in workflow
     assert workflow.count("steps.collection.outputs.production_published == 'true'") == 3
+    assert workflow.count("steps.selection.outputs.mode == 'publish'") == 3
     assert workflow.count("success() &&") >= 3
     assert "github.event_name=$EVENT_NAME" in workflow
     assert "github.event.schedule=$EVENT_SCHEDULE" in workflow
-    assert 'mode="poll"' in workflow
+    assert 'mode="publish"' in workflow
+    assert 'default: once' in workflow
+    assert 'if [[ "$SELECTED_MODE" == "once" ]]' in workflow
+    assert 'elif [[ "$SELECTED_MODE" == "publish" ]]' in workflow
+    assert 'echo "Unknown mode: $SELECTED_MODE"' in workflow
+
+
+def test_cli_requires_one_explicit_mode():
+    with pytest.raises(SystemExit) as missing:
+        _arguments(["--window", "morning"])
+    assert missing.value.code == 2
+
+
+def test_cli_rejects_both_modes():
+    with pytest.raises(SystemExit) as conflicting:
+        _arguments(
+            ["--window", "morning", "--once", "--publish-production"]
+        )
+    assert conflicting.value.code == 2
+
+
+def test_cli_accepts_once_and_publish_production_separately():
+    once = _arguments(["--window", "morning", "--once"])
+    production = _arguments(
+        ["--window", "evening", "--publish-production"]
+    )
+    assert once.once is True and once.publish_production is False
+    assert production.once is False and production.publish_production is True
+
+
+def test_publisher_prints_explicit_startup_mode_fields():
+    source = (Path(__file__).parents[1] / "github_publisher.py").read_text(
+        encoding="utf-8"
+    )
+    for field in (
+        '"event": "publisher_mode"',
+        '"selected_session": session',
+        '"mode": mode',
+        '"github_event_name":',
+        '"github_schedule":',
+    ):
+        assert field in source
 
 
 @pytest.mark.asyncio

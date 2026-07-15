@@ -611,34 +611,50 @@ class GitHubPublisher:
         return record
 
 
-def _arguments() -> argparse.Namespace:
+def _arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--window", choices=("morning", "evening"))
-    parser.add_argument("--once", action="store_true")
+    parser.add_argument("--window", choices=("morning", "evening"), required=True)
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument("--once", action="store_true")
+    modes.add_argument("--publish-production", action="store_true")
     parser.add_argument("--artifact-path")
     parser.add_argument("--success-marker")
-    arguments = parser.parse_args()
-    if arguments.window is None and not arguments.once:
-        parser.error("one of --window or --once is required")
+    arguments = parser.parse_args(argv)
     if arguments.once and arguments.success_marker:
         parser.error("--success-marker is available only for production poll mode")
+    if arguments.publish_production and arguments.artifact_path:
+        parser.error("--artifact-path is available only for --once mode")
     return arguments
 
 
 async def main() -> None:
     arguments = _arguments()
-    current = datetime.now(YANGON)
-    session: SessionName = arguments.window or ("morning" if current.time() < time(14) else "evening")
+    session: SessionName = arguments.window
+    mode = "once" if arguments.once else "publish_production"
+    _json_log(
+        {
+            "event": "publisher_mode",
+            "selected_session": session,
+            "mode": mode,
+            "github_event_name": os.getenv("GITHUB_EVENT_NAME", ""),
+            "github_schedule": os.getenv("GITHUB_SCHEDULE", ""),
+        }
+    )
     publisher = GitHubPublisher()
     if arguments.once:
         record = await publisher.smoke(session, artifact_path=arguments.artifact_path)
-    else:
+    elif arguments.publish_production:
         expected_session = os.getenv("EXPECTED_SESSION") or None
-        if arguments.success_marker:
-            publisher.clear_success_marker(arguments.success_marker)
+        success_marker = arguments.success_marker or os.getenv(
+            "PRODUCTION_SUCCESS_MARKER", ""
+        ).strip()
+        if success_marker:
+            publisher.clear_success_marker(success_marker)
         record = await publisher.publish(session, expected_session=expected_session)
-        if arguments.success_marker:
-            publisher.write_success_marker(arguments.success_marker, record)
+        if success_marker:
+            publisher.write_success_marker(success_marker, record)
+    else:  # argparse enforces a mode; retain a defensive non-writing guard.
+        raise GitHubPublisherError("An explicit publisher mode is required")
     print(json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True))
 
 
