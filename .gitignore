@@ -14,6 +14,3 @@ backfill-public/
 .pytest-tmp/
 .idea/
 .vscode/
-client_secret.json
-output/
-.shorts-tmp/
