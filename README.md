@@ -102,6 +102,12 @@ API endpoints:
 
 Google Compute Engine, Docker Compose, Nginx, and systemd files are retained only as an optional alternative. They are not used by the GitHub production workflow. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
+## GitHub-only YouTube Shorts automation
+
+This repository also contains an independent GitHub Actions workflow that creates one original English motivational Short each day at 7:07 PM in `Asia/Yangon`. It uses the free Pexels Videos API, local FFmpeg rendering on `ubuntu-latest`, repository-supplied royalty-free music, and the official YouTube Data API. It does not use n8n, a VM, a database, a paid renderer, or a paid AI API.
+
+Uploads remain private by default. Start with the beginner setup guide in [SETUP.md](SETUP.md). Royalty-free music requirements are in [music/README.md](music/README.md).
+
 ## Data-use notice
 
 SET market data usage may be subject to SET terms and licensing. Confirm endpoint use, collection frequency, and redistribution rights for your application. Never commit cookies, browser profiles, credentials, raw response bodies, traces, databases, or logs.

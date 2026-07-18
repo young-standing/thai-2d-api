@@ -1,0 +1,615 @@
+[
+  {
+    "id": "q001",
+    "quote": "Do the useful thing before the comfortable thing asks for your time.",
+    "pexels_search": "focused athlete training alone",
+    "category": "discipline"
+  },
+  {
+    "id": "q002",
+    "quote": "A promise to yourself becomes power when you keep it on ordinary days.",
+    "pexels_search": "early morning runner city",
+    "category": "discipline"
+  },
+  {
+    "id": "q003",
+    "quote": "Discipline is choosing tomorrow's freedom over today's easiest excuse.",
+    "pexels_search": "person climbing mountain trail",
+    "category": "discipline"
+  },
+  {
+    "id": "q004",
+    "quote": "Small rules followed daily can carry dreams farther than sudden inspiration.",
+    "pexels_search": "organized desk morning light",
+    "category": "discipline"
+  },
+  {
+    "id": "q005",
+    "quote": "Your future changes when your routine stops negotiating with your mood.",
+    "pexels_search": "determined person gym workout",
+    "category": "discipline"
+  },
+  {
+    "id": "q006",
+    "quote": "Finish the quiet work that no applause will ever notice.",
+    "pexels_search": "hands writing notebook focus",
+    "category": "discipline"
+  },
+  {
+    "id": "q007",
+    "quote": "Control the first hour and the rest of the day has a direction.",
+    "pexels_search": "sunrise morning routine",
+    "category": "discipline"
+  },
+  {
+    "id": "q008",
+    "quote": "The habit you protect today becomes the strength you rely on tomorrow.",
+    "pexels_search": "athlete tying running shoes",
+    "category": "discipline"
+  },
+  {
+    "id": "q009",
+    "quote": "Hard choices become easier when your reason is stronger than your comfort.",
+    "pexels_search": "hiker steep mountain path",
+    "category": "discipline"
+  },
+  {
+    "id": "q010",
+    "quote": "Train your attention, and your actions will stop wandering.",
+    "pexels_search": "person meditating sunrise",
+    "category": "discipline"
+  },
+  {
+    "id": "q011",
+    "quote": "One disciplined hour can rescue a week of scattered intentions.",
+    "pexels_search": "focused student studying library",
+    "category": "discipline"
+  },
+  {
+    "id": "q012",
+    "quote": "Keep the standard even when nobody is checking the result.",
+    "pexels_search": "craftsperson working carefully",
+    "category": "discipline"
+  },
+  {
+    "id": "q013",
+    "quote": "You do not need more pressure; you need fewer broken agreements with yourself.",
+    "pexels_search": "person planning calendar desk",
+    "category": "discipline"
+  },
+  {
+    "id": "q014",
+    "quote": "A clear boundary around your time is a vote for the life you want.",
+    "pexels_search": "minimal clock workspace",
+    "category": "discipline"
+  },
+  {
+    "id": "q015",
+    "quote": "Practice saying no to distractions before they learn your schedule.",
+    "pexels_search": "phone turned off desk",
+    "category": "discipline"
+  },
+  {
+    "id": "q016",
+    "quote": "The strongest routine is simple enough to repeat on your hardest day.",
+    "pexels_search": "runner training in rain",
+    "category": "discipline"
+  },
+  {
+    "id": "q017",
+    "quote": "Let preparation make confidence unnecessary for the first step.",
+    "pexels_search": "athlete preparing before race",
+    "category": "discipline"
+  },
+  {
+    "id": "q018",
+    "quote": "Success grows quietly while excuses compete for attention.",
+    "pexels_search": "business person walking city sunrise",
+    "category": "success"
+  },
+  {
+    "id": "q019",
+    "quote": "Build something useful today, and let recognition arrive on its own schedule.",
+    "pexels_search": "creative professional working studio",
+    "category": "success"
+  },
+  {
+    "id": "q020",
+    "quote": "Progress becomes visible after patience has already done the invisible work.",
+    "pexels_search": "seedling growing time lapse nature",
+    "category": "success"
+  },
+  {
+    "id": "q021",
+    "quote": "A meaningful win begins with a problem you are willing to understand deeply.",
+    "pexels_search": "engineer solving problem desk",
+    "category": "success"
+  },
+  {
+    "id": "q022",
+    "quote": "Measure success by the value you create, not the noise you attract.",
+    "pexels_search": "team collaborating modern office",
+    "category": "success"
+  },
+  {
+    "id": "q023",
+    "quote": "The next opportunity often looks like work nobody volunteered to do.",
+    "pexels_search": "worker opening shop morning",
+    "category": "success"
+  },
+  {
+    "id": "q024",
+    "quote": "Aim for results that still matter after the excitement fades.",
+    "pexels_search": "mountain summit wide view",
+    "category": "success"
+  },
+  {
+    "id": "q025",
+    "quote": "Your best advantage is becoming dependable when the outcome is uncertain.",
+    "pexels_search": "team member helping colleague",
+    "category": "success"
+  },
+  {
+    "id": "q026",
+    "quote": "Success is easier to carry when character grew strong enough first.",
+    "pexels_search": "person walking forest path",
+    "category": "success"
+  },
+  {
+    "id": "q027",
+    "quote": "Learn faster than your circumstances can change around you.",
+    "pexels_search": "student learning computer",
+    "category": "success"
+  },
+  {
+    "id": "q028",
+    "quote": "Do not chase every door; become excellent enough to recognize the right one.",
+    "pexels_search": "hallway doors light",
+    "category": "success"
+  },
+  {
+    "id": "q029",
+    "quote": "A goal becomes real when your calendar begins to reflect it.",
+    "pexels_search": "calendar planning close up",
+    "category": "success"
+  },
+  {
+    "id": "q030",
+    "quote": "Create evidence with action instead of arguments with doubt.",
+    "pexels_search": "hands building project workshop",
+    "category": "success"
+  },
+  {
+    "id": "q031",
+    "quote": "The work that compounds is rarely the work that feels dramatic.",
+    "pexels_search": "city construction progress",
+    "category": "success"
+  },
+  {
+    "id": "q032",
+    "quote": "Choose a direction worth staying with when quick rewards disappear.",
+    "pexels_search": "long road horizon",
+    "category": "success"
+  },
+  {
+    "id": "q033",
+    "quote": "Make your contribution so clear that luck has somewhere to land.",
+    "pexels_search": "professional presenting project",
+    "category": "success"
+  },
+  {
+    "id": "q034",
+    "quote": "Winning once is an event; building the ability to win again is success.",
+    "pexels_search": "athlete practicing repeated drills",
+    "category": "success"
+  },
+  {
+    "id": "q035",
+    "quote": "Healing begins when you stop demanding that yesterday explain itself.",
+    "pexels_search": "calm ocean sunrise",
+    "category": "healing"
+  },
+  {
+    "id": "q036",
+    "quote": "Rest is not retreat when it helps you return with a steadier heart.",
+    "pexels_search": "person resting by window",
+    "category": "healing"
+  },
+  {
+    "id": "q037",
+    "quote": "Some seasons are for rebuilding the parts nobody else can see.",
+    "pexels_search": "forest regrowth sunlight",
+    "category": "healing"
+  },
+  {
+    "id": "q038",
+    "quote": "You can honor what hurt without giving it permanent ownership of your future.",
+    "pexels_search": "person walking beach alone",
+    "category": "healing"
+  },
+  {
+    "id": "q039",
+    "quote": "Give yourself the patience you would offer someone learning to breathe again.",
+    "pexels_search": "slow waves peaceful shore",
+    "category": "healing"
+  },
+  {
+    "id": "q040",
+    "quote": "A softer pace can still move you toward a stronger life.",
+    "pexels_search": "gentle river flowing nature",
+    "category": "healing"
+  },
+  {
+    "id": "q041",
+    "quote": "Healing is making room for peace without waiting for every answer.",
+    "pexels_search": "quiet lake morning mist",
+    "category": "healing"
+  },
+  {
+    "id": "q042",
+    "quote": "Your scars are history, not instructions for how tomorrow must feel.",
+    "pexels_search": "sunlight through trees",
+    "category": "healing"
+  },
+  {
+    "id": "q043",
+    "quote": "Release the need to recover on somebody else's timeline.",
+    "pexels_search": "person walking slow forest",
+    "category": "healing"
+  },
+  {
+    "id": "q044",
+    "quote": "A calm boundary can protect what anger never managed to repair.",
+    "pexels_search": "closed garden gate peaceful",
+    "category": "healing"
+  },
+  {
+    "id": "q045",
+    "quote": "You are allowed to outgrow the version of you that only knew survival.",
+    "pexels_search": "butterfly emerging nature",
+    "category": "healing"
+  },
+  {
+    "id": "q046",
+    "quote": "Peace often arrives through small choices repeated in private.",
+    "pexels_search": "tea journal cozy morning",
+    "category": "healing"
+  },
+  {
+    "id": "q047",
+    "quote": "Let grief visit, but do not hand it the keys to every room.",
+    "pexels_search": "rain on window warm home",
+    "category": "healing"
+  },
+  {
+    "id": "q048",
+    "quote": "Healing can be quiet and still be the bravest work you do.",
+    "pexels_search": "person meditating mountain",
+    "category": "healing"
+  },
+  {
+    "id": "q049",
+    "quote": "Your nervous system deserves moments that ask nothing from it.",
+    "pexels_search": "clouds drifting peaceful sky",
+    "category": "healing"
+  },
+  {
+    "id": "q050",
+    "quote": "Begin again gently; force is not the only language of change.",
+    "pexels_search": "new leaves spring closeup",
+    "category": "healing"
+  },
+  {
+    "id": "q051",
+    "quote": "What you survived may shape your wisdom without limiting your joy.",
+    "pexels_search": "sun after storm landscape",
+    "category": "healing"
+  },
+  {
+    "id": "q052",
+    "quote": "Confidence is built when your actions keep introducing you to your own courage.",
+    "pexels_search": "person standing mountain edge",
+    "category": "confidence"
+  },
+  {
+    "id": "q053",
+    "quote": "Speak to yourself like someone whose potential is worth protecting.",
+    "pexels_search": "person mirror morning confidence",
+    "category": "confidence"
+  },
+  {
+    "id": "q054",
+    "quote": "You do not need permission to take your preparation seriously.",
+    "pexels_search": "professional preparing presentation",
+    "category": "confidence"
+  },
+  {
+    "id": "q055",
+    "quote": "Let competence grow so steadily that doubt has less room to speak.",
+    "pexels_search": "person practicing public speaking",
+    "category": "confidence"
+  },
+  {
+    "id": "q056",
+    "quote": "Walk into the room to contribute, not to audition for your worth.",
+    "pexels_search": "confident person entering office",
+    "category": "confidence"
+  },
+  {
+    "id": "q057",
+    "quote": "Your voice becomes stronger each time you use it with honesty.",
+    "pexels_search": "speaker microphone stage",
+    "category": "confidence"
+  },
+  {
+    "id": "q058",
+    "quote": "Courage can shake and still take the next step.",
+    "pexels_search": "person crossing suspension bridge",
+    "category": "confidence"
+  },
+  {
+    "id": "q059",
+    "quote": "Stop shrinking your goals to fit somebody else's imagination.",
+    "pexels_search": "wide open desert traveler",
+    "category": "confidence"
+  },
+  {
+    "id": "q060",
+    "quote": "Trust grows when you collect proof that you can handle discomfort.",
+    "pexels_search": "cold water swimmer training",
+    "category": "confidence"
+  },
+  {
+    "id": "q061",
+    "quote": "You belong wherever your work and integrity have earned you a place.",
+    "pexels_search": "professional team meeting",
+    "category": "confidence"
+  },
+  {
+    "id": "q062",
+    "quote": "Confidence is not knowing everything; it is trusting yourself to learn.",
+    "pexels_search": "student asking question classroom",
+    "category": "confidence"
+  },
+  {
+    "id": "q063",
+    "quote": "Stand by your values before asking the world to stand by you.",
+    "pexels_search": "person standing firm city",
+    "category": "confidence"
+  },
+  {
+    "id": "q064",
+    "quote": "Your presence does not need an apology or an explanation.",
+    "pexels_search": "portrait confident person natural light",
+    "category": "confidence"
+  },
+  {
+    "id": "q065",
+    "quote": "Prepare deeply, then allow yourself to be seen.",
+    "pexels_search": "performer backstage preparation",
+    "category": "confidence"
+  },
+  {
+    "id": "q066",
+    "quote": "Comparison gets quieter when commitment gets louder.",
+    "pexels_search": "solo runner track",
+    "category": "confidence"
+  },
+  {
+    "id": "q067",
+    "quote": "Own your progress without pretending the journey was easy.",
+    "pexels_search": "hiker looking back trail",
+    "category": "confidence"
+  },
+  {
+    "id": "q068",
+    "quote": "The way you recover from mistakes can become your strongest introduction.",
+    "pexels_search": "basketball player gets up",
+    "category": "confidence"
+  },
+  {
+    "id": "q069",
+    "quote": "Growth asks you to release identities that once kept you safe.",
+    "pexels_search": "tree shedding leaves autumn",
+    "category": "growth"
+  },
+  {
+    "id": "q070",
+    "quote": "The next version of your life needs skills your comfort zone cannot teach.",
+    "pexels_search": "person learning new skill",
+    "category": "growth"
+  },
+  {
+    "id": "q071",
+    "quote": "Stay curious enough to revise the plan without abandoning the purpose.",
+    "pexels_search": "traveler reading map outdoors",
+    "category": "growth"
+  },
+  {
+    "id": "q072",
+    "quote": "Every honest reflection gives tomorrow better instructions.",
+    "pexels_search": "person journaling reflective",
+    "category": "growth"
+  },
+  {
+    "id": "q073",
+    "quote": "You are not behind; you are responsible for the next direction you choose.",
+    "pexels_search": "crossroads road aerial",
+    "category": "growth"
+  },
+  {
+    "id": "q074",
+    "quote": "A stronger mind is built by questions that challenge familiar answers.",
+    "pexels_search": "student thinking library",
+    "category": "growth"
+  },
+  {
+    "id": "q075",
+    "quote": "Let mistakes become information instead of permanent definitions.",
+    "pexels_search": "scientist reviewing experiment",
+    "category": "growth"
+  },
+  {
+    "id": "q076",
+    "quote": "Growth feels awkward because old habits no longer fit the new direction.",
+    "pexels_search": "plant through concrete",
+    "category": "growth"
+  },
+  {
+    "id": "q077",
+    "quote": "Choose environments that make your better habits easier to practice.",
+    "pexels_search": "bright healthy workspace",
+    "category": "growth"
+  },
+  {
+    "id": "q078",
+    "quote": "Your capacity expands when you stop treating discomfort as a stop sign.",
+    "pexels_search": "climber reaching rock ledge",
+    "category": "growth"
+  },
+  {
+    "id": "q079",
+    "quote": "Learn from the season without becoming trapped inside it.",
+    "pexels_search": "changing seasons forest",
+    "category": "growth"
+  },
+  {
+    "id": "q080",
+    "quote": "The life you want may require a vocabulary of choices you have never used.",
+    "pexels_search": "person learning language notebook",
+    "category": "growth"
+  },
+  {
+    "id": "q081",
+    "quote": "Keep what is true, improve what is weak, and release what is finished.",
+    "pexels_search": "hands pruning garden",
+    "category": "growth"
+  },
+  {
+    "id": "q082",
+    "quote": "A new perspective can turn the same obstacle into a different path.",
+    "pexels_search": "drone mountain winding road",
+    "category": "growth"
+  },
+  {
+    "id": "q083",
+    "quote": "Growth is not becoming someone else; it is using more of who you are.",
+    "pexels_search": "person painting creative studio",
+    "category": "growth"
+  },
+  {
+    "id": "q084",
+    "quote": "Ask better questions before demanding faster answers.",
+    "pexels_search": "thoughtful person city bench",
+    "category": "growth"
+  },
+  {
+    "id": "q085",
+    "quote": "Your potential needs experiments, not endless predictions.",
+    "pexels_search": "inventor working prototype",
+    "category": "growth"
+  },
+  {
+    "id": "q086",
+    "quote": "Consistency turns a good intention into a place you can actually reach.",
+    "pexels_search": "footsteps long path",
+    "category": "consistency"
+  },
+  {
+    "id": "q087",
+    "quote": "A small action repeated with care can outlast a perfect plan delayed forever.",
+    "pexels_search": "hands practicing piano",
+    "category": "consistency"
+  },
+  {
+    "id": "q088",
+    "quote": "Return to the work before you judge how far it can take you.",
+    "pexels_search": "writer typing every morning",
+    "category": "consistency"
+  },
+  {
+    "id": "q089",
+    "quote": "Momentum trusts the person who keeps showing up after the novelty leaves.",
+    "pexels_search": "runner same road daily",
+    "category": "consistency"
+  },
+  {
+    "id": "q090",
+    "quote": "Do less if necessary, but keep the connection to your goal alive.",
+    "pexels_search": "small daily workout home",
+    "category": "consistency"
+  },
+  {
+    "id": "q091",
+    "quote": "The calendar rewards repetition more reliably than intensity.",
+    "pexels_search": "calendar pages turning",
+    "category": "consistency"
+  },
+  {
+    "id": "q092",
+    "quote": "One steady step is enough when you are willing to take another tomorrow.",
+    "pexels_search": "walking feet sunrise road",
+    "category": "consistency"
+  },
+  {
+    "id": "q093",
+    "quote": "Consistency is patience with a schedule.",
+    "pexels_search": "clock and planner minimal",
+    "category": "consistency"
+  },
+  {
+    "id": "q094",
+    "quote": "Your ordinary effort becomes extraordinary when it survives enough ordinary days.",
+    "pexels_search": "worker daily craft routine",
+    "category": "consistency"
+  },
+  {
+    "id": "q095",
+    "quote": "Keep the chain simple: begin, finish, recover, repeat.",
+    "pexels_search": "cycling training road",
+    "category": "consistency"
+  },
+  {
+    "id": "q096",
+    "quote": "Results often arrive late to the habits that created them.",
+    "pexels_search": "gardener watering plants",
+    "category": "consistency"
+  },
+  {
+    "id": "q097",
+    "quote": "A reliable pace beats a heroic sprint that cannot return tomorrow.",
+    "pexels_search": "jogger steady pace park",
+    "category": "consistency"
+  },
+  {
+    "id": "q098",
+    "quote": "Make the next repetition cleaner, not necessarily bigger.",
+    "pexels_search": "athlete practicing form",
+    "category": "consistency"
+  },
+  {
+    "id": "q099",
+    "quote": "Progress stays when the habit has somewhere permanent in your day.",
+    "pexels_search": "morning coffee notebook routine",
+    "category": "consistency"
+  },
+  {
+    "id": "q100",
+    "quote": "Show up at the same door until effort learns how to open it.",
+    "pexels_search": "person opening workshop door",
+    "category": "consistency"
+  },
+  {
+    "id": "q101",
+    "quote": "Consistency gives talent enough time to become useful.",
+    "pexels_search": "musician daily practice",
+    "category": "consistency"
+  },
+  {
+    "id": "q102",
+    "quote": "When motivation changes its mind, let the routine keep the appointment.",
+    "pexels_search": "alarm clock running shoes",
+    "category": "consistency"
+  }
+]
+
